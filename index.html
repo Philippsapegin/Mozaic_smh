@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#151719" />
+    <title>Мозаика — редактор для журналистов</title>
+  </head>
+  <body>
+    <div class="app">
+      <main class="stage-wrap">
+        <div class="stage" id="stage" aria-label="Рабочая область изображения">
+          <canvas id="editorCanvas"></canvas>
+
+          <nav class="tool-dock" aria-label="Инструменты">
+            <button type="button" class="tool-button active" data-tool="mosaic" aria-label="Мозаика" aria-pressed="true" title="Мозаика (1)">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            </button>
+            <button type="button" class="tool-button" data-tool="marker" aria-label="Маркер" aria-pressed="false" title="Маркер (2)">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17.5 17.5 4l2.5 2.5L6.5 20H4v-2.5Z"/><path d="M13.5 8 16 10.5"/></svg>
+            </button>
+            <button type="button" class="tool-button" data-tool="bubble" aria-label="Баббл" aria-pressed="false" title="Баббл (3)">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v12H9l-5 4V5Z"/><path d="M8 9h8M8 13h5"/></svg>
+            </button>
+          </nav>
+
+          <div class="empty-state" id="emptyState">
+            <div class="empty-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m3 17 5-5 4 4 3-3 6 5"/><circle cx="16.5" cy="8" r="1.5"/></svg></div>
+            <h1>Загрузите изображение</h1>
+            <p>Кликните здесь или перетащите файл</p>
+            <button class="button button-primary" id="emptyUploadButton" type="button">Выбрать файл</button>
+          </div>
+          <div class="drop-overlay" id="dropOverlay">Отпустите файл для загрузки</div>
+          <div class="stage-hint" id="stageHint">ЛКМ — мозаика · ПКМ — стереть · Колесо — размер кисти</div>
+
+          <div class="bottom-console" role="toolbar" aria-label="Работа с изображением">
+            <button type="button" class="console-button" id="uploadButton" title="Загрузить другое изображение" aria-label="Загрузить другое изображение">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4z"/><path d="m4 16 5-5 4 4 3-3 4 4"/><path d="M16.5 8h.01"/></svg>
+            </button>
+            <span class="console-divider"></span>
+            <button type="button" class="console-button" id="cropButton" title="Настроить обрезку" aria-label="Настроить обрезку">▣</button>
+            <button type="button" class="console-button hidden" id="resetCropButton" title="Сбросить обрезку" aria-label="Сбросить обрезку">×</button>
+            <button type="button" class="console-button" id="rotateLeftButton" title="Повернуть влево на 90°" aria-label="Повернуть влево">↶</button>
+            <button type="button" class="console-button" id="rotateRightButton" title="Повернуть вправо на 90°" aria-label="Повернуть вправо">↷</button>
+            <span class="console-divider"></span>
+            <button type="button" class="save-button" id="saveButton">Сохранить PNG</button>
+          </div>
+          <input id="fileInput" type="file" accept="image/png,image/jpeg,image/webp,image/avif,image/gif" hidden />
+        </div>
+      </main>
+
+      <aside class="inspector" aria-label="Настройки инструмента">
+        <section class="inspector-panel" id="mosaicPanel">
+          <div class="control-block">
+            <div class="control-label"><label for="grainRange">Размер квадрата</label><output id="grainValue">32</output></div>
+            <input id="grainRange" type="range" min="6" max="80" value="32" />
+          </div>
+          <div class="control-block">
+            <div class="control-label"><label for="brushRange">Размер кисти</label><output id="brushValue">44</output></div>
+            <input id="brushRange" type="range" min="8" max="180" value="44" />
+          </div>
+          <div class="list-heading">Найденные лица <span id="faceCount">0</span></div>
+          <div class="face-status" id="faceStatus" role="status">Загрузите изображение.</div>
+          <div class="face-list" id="faceList"></div>
+        </section>
+
+        <section class="inspector-panel hidden" id="markerPanel">
+          <div class="list-heading">Прямоугольники <span id="markerCount">0</span></div>
+          <div class="marker-list" id="markerList"></div>
+        </section>
+
+        <section class="inspector-panel hidden" id="bubblePanel">
+          <div class="bubble-editor">
+            <label class="field-label" for="bubbleText">Текст</label>
+            <textarea id="bubbleText" rows="5" wrap="off" placeholder="Кликните по изображению"></textarea>
+            <div class="control-block">
+              <div class="control-label"><label for="fontRange">Размер текста</label><output id="fontValue">26</output></div>
+              <input id="fontRange" type="range" min="16" max="48" value="26" />
+            </div>
+            <button type="button" class="bold-button" id="boldButton" aria-label="Жирный текст" aria-pressed="false" title="Жирный текст"><strong>B</strong></button>
+          </div>
+          <div class="list-heading">Бабблы <span id="bubbleCount">0</span></div>
+          <div class="bubble-list" id="bubbleList"></div>
+        </section>
+      </aside>
+    </div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="/src/app.js"></script>
+  </body>
+</html>

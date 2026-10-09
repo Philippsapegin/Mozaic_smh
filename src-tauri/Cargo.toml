@@ -1,0 +1,22 @@
+[package]
+name = "mozaic"
+version = "1.0.0"
+description = "Offline image editor for journalists"
+edition = "2021"
+
+[lib]
+name = "mozaic_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+
+[profile.release]
+strip = true
+lto = "thin"
+codegen-units = 1

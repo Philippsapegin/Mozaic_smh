@@ -1,0 +1,175 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pixelizator</title>
+    <style>
+body { margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; font-family: sans-serif; overflow: hidden; background: #1e1e1e; color: #e0e0e0; }
+#toolbar { background: #2d2d2d; padding: 8px 15px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; border-bottom: 2px solid #3d3d3d; z-index: 100; }
+.tool-group { display: flex; align-items: center; gap: 8px; padding: 5px 10px; background: #383838; border-radius: 4px; border: 1px solid #444; }
+.sub-group { display: flex; border-radius: 4px; overflow: hidden; border: 1px solid #555; }
+.sub-group button { border-radius: 0; border: none; border-right: 1px solid #555; }
+#canvas-container { flex-grow: 1; position: relative; overflow: hidden; background: #121212; }
+canvas { position: absolute; top: 0; left: 0; }
+button { padding: 5px 12px; cursor: pointer; background: #4a4a4a; color: white; border: 1px solid #555; border-radius: 3px; font-size: 13px; }
+button.active { background: #218838; }
+label { font-size: 11px; text-transform: uppercase; color: #aaa; font-weight: bold; }
+input[type="number"] { background: #252525; color: white; border: 1px solid #444; padding: 3px; width: 45px; }
+.modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); }
+.modal-content { background: #2d2d2d; margin: 10% auto; padding: 20px; border-radius: 8px; width: 50%; max-width: 500px; line-height: 1.5; }
+.close { color: #aaa; float: right; font-size: 24px; cursor: pointer; }
+.close:hover { color: white; }
+
+</style>
+</head>
+<body>
+    <div id="toolbar">
+        <div class="tool-group">
+            <label>Файл:</label><input type="file" id="imageLoader" accept="image/*">
+        </div>
+        <div class="tool-group">
+            <label>Выделить:</label>
+            <input type="color" id="markerColor" value="#ffff00">
+            <input type="number" id="markerWidth" value="20" min="1" max="100">
+            <button id="markerTool">Выделить текст</button>
+        </div>
+        <div class="tool-group">
+            <label>Фильтр:</label>
+            <select id="filterType"><option value="pixelate">Пикселизация</option><option value="blur">Размытие</option></select>
+            <label>Размер пикселя:</label><input type="number" id="pixelSize" value="10" min="1" max="50">
+            <div class="sub-group"><button id="brushModeBtn">Кисть</button><button id="rectModeBtn">Рамка</button></div>
+            <label>Размер кисти:</label><input type="number" id="brushSize" value="30" min="1" max="200">
+        </div>
+        <div class="tool-group">
+            <label>Обрезка:</label><button id="cropToggle">Рамка обрезки</button><button id="aspect32Btn">3:2</button><button id="saveBtn" style="background: #28a745">Сохранить</button>
+        </div>
+        <div class="tool-group">
+            <button id="undoBtn" title="Отменить (Ctrl+Z)">Отменить</button><button id="resetView">Сброс</button><button id="infoBtn" style="background: #17a2b8; margin-left: 10px;">Инфо</button>
+        </div>
+    </div>
+    <div id="canvas-container"><canvas id="mainCanvas"></canvas></div>
+    <div id="infoModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Инструкция Pixelizator</h2>
+            <ul>
+                <li><strong>Файл:</strong> Выберите или перетащите фото.</li>
+                <li><strong>Выделить:</strong> Рисует цветную линию (режим Multiply).</li>
+                <li><strong>Фильтр:</strong> Пикселизация/Размытие по маске или в рамке.</li>
+                <li><strong>Обрезка:</strong> Включите рамку, "3:2" фиксирует пропорции.</li>
+                <li><strong>Сохранить:</strong> Сохраняет рамку или всё фото.</li>
+                <li><strong>Управление:</strong> Ctrl+Z - отмена. Колесо - зум. ПКМ - перемещение.</li>
+            </ul>
+        </div>
+    </div>
+    <script>
+const canvas = document.getElementById("mainCanvas"), ctx = canvas.getContext("2d"), loader = document.getElementById("imageLoader"), markerBtn = document.getElementById("markerTool"), brushModeBtn = document.getElementById("brushModeBtn"), rectModeBtn = document.getElementById("rectModeBtn"), saveBtn = document.getElementById("saveBtn"), resetBtn = document.getElementById("resetView"), undoBtn = document.getElementById("undoBtn"), infoBtn = document.getElementById("infoBtn"), infoModal = document.getElementById("infoModal"), closeBtn = document.querySelector(".close"), cropToggleBtn = document.getElementById("cropToggle"), aspect32Btn = document.getElementById("aspect32Btn"), filterTypeSelect = document.getElementById("filterType");
+let img = null, scale = 1, offsetX = 0, offsetY = 0, activeTool = null, pixelMode = "brush", showCrop = false, lockAspect32 = false, cropRect = { x: 100, y: 100, w: 400, h: 300 }, draggingPart = null;
+let editsCanvas = document.createElement("canvas"), editsCtx = editsCanvas.getContext("2d"), maskCanvas = document.createElement("canvas"), maskCtx = maskCanvas.getContext("2d"), isDrawing = false, startX, startY, currentX, currentY, lastBrushX, lastBrushY, hoverX, hoverY, isMouseOver = false, historyStack = [];
+function saveHistory() { if (!img) return; historyStack.push({ edits: editsCtx.getImageData(0, 0, editsCanvas.width, editsCanvas.height), mask: maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height) }); if (historyStack.length > 15) historyStack.shift(); }
+function undo() { if (historyStack.length > 0) { const s = historyStack.pop(); editsCtx.putImageData(s.edits, 0, 0); maskCtx.putImageData(s.mask, 0, 0); render(); } }
+if (undoBtn) undoBtn.onclick = undo; document.addEventListener("keydown", (e) => { if (e.ctrlKey && (e.key === "z" || e.key === "я")) { e.preventDefault(); undo(); } });
+function initCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight - document.getElementById("toolbar").offsetHeight; if (img && !draggingPart) centerCrop(); render(); }
+window.addEventListener("resize", initCanvas); initCanvas();
+function handleImageLoad(f) { if (!f || !f.type.startsWith("image/")) return; const r = new FileReader(); r.onload = (e) => { img = new Image(); img.onload = () => { resetView(); editsCanvas.width = img.width; editsCanvas.height = img.height; maskCanvas.width = img.width; maskCanvas.height = img.height; editsCtx.clearRect(0, 0, img.width, img.height); maskCtx.clearRect(0, 0, img.width, img.height); historyStack = []; centerCrop(); render(); }; img.src = e.target.result; }; r.readAsDataURL(f); }
+if (loader) loader.onchange = (e) => handleImageLoad(e.target.files[0]);
+const container = document.getElementById("canvas-container");
+if (container) { container.ondragover = (e) => { e.preventDefault(); container.style.opacity = "0.7"; }; container.ondragleave = () => { container.style.opacity = "1"; }; container.ondrop = (e) => { e.preventDefault(); container.style.opacity = "1"; if (e.dataTransfer.files.length > 0) handleImageLoad(e.dataTransfer.files[0]); }; }
+function resetView() { if (!img) return; scale = Math.min(canvas.width / img.width, canvas.height / img.height, 0.8); offsetX = (canvas.width - img.width * scale) / 2; offsetY = (canvas.height - img.height * scale) / 2; }
+function clampCropRect() {
+    if (!img) return;
+    const minX = offsetX, minY = offsetY, maxX = offsetX + img.width * scale, maxY = offsetY + img.height * scale;
+    
+    // Initial clamping
+    if (cropRect.x < minX) cropRect.x = minX;
+    if (cropRect.y < minY) cropRect.y = minY;
+    
+    if (lockAspect32) {
+        // Handle max boundaries while preserving 3:2
+        if (cropRect.x + cropRect.w > maxX) {
+            cropRect.w = maxX - cropRect.x;
+            cropRect.h = cropRect.w * (2/3);
+        }
+        if (cropRect.y + cropRect.h > maxY) {
+            cropRect.h = maxY - cropRect.y;
+            cropRect.w = cropRect.h * (3/2);
+            // Re-check width clamping after height adjustment
+            if (cropRect.x + cropRect.w > maxX) {
+                 cropRect.w = maxX - cropRect.x;
+                 cropRect.h = cropRect.w * (2/3);
+            }
+        }
+    } else {
+        if (cropRect.x + cropRect.w > maxX) cropRect.w = maxX - cropRect.x;
+        if (cropRect.y + cropRect.h > maxY) cropRect.h = maxY - cropRect.y;
+    }
+
+    if (cropRect.w < 20) { cropRect.w = 20; if(lockAspect32) cropRect.h = 20*(2/3); }
+    if (cropRect.h < 20) { cropRect.h = 20; if(lockAspect32) cropRect.w = 20*(3/2); }
+}
+function centerCrop() { if (!img) return; cropRect = { x: offsetX, y: offsetY, w: img.width * scale, h: img.height * scale }; clampCropRect(); }
+function getMousePos(e) { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+function getImagePos(p) { return { x: (p.x - offsetX) / scale, y: (p.y - offsetY) / scale }; }
+function getDraggingPart(p) { const hit = 10, {x, y, w, h} = cropRect; if (Math.abs(p.x - x) < hit && Math.abs(p.y - y) < hit) return "tl"; if (Math.abs(p.x - (x+w)) < hit && Math.abs(p.y - y) < hit) return "tr"; if (Math.abs(p.x - x) < hit && Math.abs(p.y - (y+h)) < hit) return "bl"; if (Math.abs(p.x - (x+w)) < hit && Math.abs(p.y - (y+h)) < hit) return "br"; if (p.x > x && p.x < x + w && Math.abs(p.y - y) < hit) return "top"; if (p.x > x && p.x < x + w && Math.abs(p.y - (y+h)) < hit) return "bottom"; if (p.y > y && p.y < y + h && Math.abs(p.x - x) < hit) return "left"; if (p.y > y && p.y < y + h && Math.abs(p.x - (x+w)) < hit) return "right"; if (p.x > x && p.x < x + w && p.y > y && p.y < y + h) return "move"; return null; }
+canvas.onmouseenter = () => { isMouseOver = true; render(); }; canvas.onmouseleave = () => { isMouseOver = false; render(); };
+canvas.onmousedown = (e) => { if (!img) return; const pos = getMousePos(e); let part = showCrop ? getDraggingPart(pos) : null; if (activeTool && part === "move") part = null; if (e.button === 0) { if (part) { draggingPart = part; startX = pos.x; startY = pos.y; } else if (activeTool) { isDrawing = true; saveHistory(); const iPos = getImagePos(pos); startX = iPos.x; startY = iPos.y; lastBrushX = iPos.x; lastBrushY = iPos.y; if (activeTool === "pixel" && pixelMode === "brush") applyPixelBrushLine(lastBrushX, lastBrushY, iPos.x, iPos.y); } else { isDrawing = "pan"; startX = e.clientX; startY = e.clientY; } } else { isDrawing = "pan"; startX = e.clientX; startY = e.clientY; } };
+canvas.onmousemove = (e) => { if (!img) return; const pos = getMousePos(e); hoverX = pos.x; hoverY = pos.y; if (draggingPart) { const dx = pos.x - startX, dy = pos.y - startY, r = cropRect, minX = offsetX, minY = offsetY, maxX = offsetX + img.width * scale, maxY = offsetY + img.height * scale; if (draggingPart === "move") { r.x = Math.max(minX, Math.min(maxX - r.w, r.x + dx)); r.y = Math.max(minY, Math.min(maxY - r.h, r.y + dy)); } else { let left = r.x, right = r.x + r.w, top = r.y, bottom = r.y + r.h;
+            if (draggingPart.includes("l")) left += dx;
+            if (draggingPart.includes("r")) right += dx;
+            if (draggingPart.includes("t")) top += dy;
+            if (draggingPart.includes("b")) bottom += dy;
+
+            if (lockAspect32) {
+                let nw = right - left;
+                let nh = bottom - top;
+                if (draggingPart === "left" || draggingPart === "right" || draggingPart.includes("l") || draggingPart.includes("r")) {
+                    nh = nw * (2/3);
+                    if (draggingPart.includes("t")) top = bottom - nh;
+                    else bottom = top + nh;
+                } else {
+                    nw = nh * (3/2);
+                    if (draggingPart.includes("l")) left = right - nw;
+                    else right = left + nw;
+                }
+                r.x = left; r.y = top; r.w = right - left; r.h = bottom - top;
+            } else {
+                r.x = left; r.y = top; r.w = right - left; r.h = bottom - top;
+            }
+            clampCropRect(); } startX = pos.x; startY = pos.y; render(); return; } if (isDrawing === "pan") { offsetX += e.clientX - startX; offsetY += e.clientY - startY; startX = e.clientX; startY = e.clientY; clampCropRect(); render(); } else if (isDrawing === true) { const iPos = getImagePos(pos); currentX = iPos.x; currentY = iPos.y; if (activeTool === "pixel" && pixelMode === "brush") { applyPixelBrushLine(lastBrushX, lastBrushY, iPos.x, iPos.y); lastBrushX = iPos.x; lastBrushY = iPos.y; } render(); } else { let part = showCrop ? getDraggingPart(pos) : null; if (activeTool && part === "move") part = null; if (part === "move") canvas.style.cursor = "move"; else if (["tl", "br"].includes(part)) canvas.style.cursor = "nwse-resize"; else if (["tr", "bl"].includes(part)) canvas.style.cursor = "nesw-resize"; else if (["top", "bottom"].includes(part)) canvas.style.cursor = "ns-resize"; else if (["left", "right"].includes(part)) canvas.style.cursor = "ew-resize"; else canvas.style.cursor = activeTool && activeTool !== "pixel" ? "crosshair" : "default"; if (activeTool === "pixel" && pixelMode === "brush" && !part) canvas.style.cursor = "none"; render(); } };
+canvas.onmouseup = () => { if (isDrawing === true) { if (activeTool === "marker") commitMarker(startX, startY, currentX, currentY); else if (activeTool === "pixel" && pixelMode === "rect") commitPixelRect(startX, startY, currentX, currentY); } isDrawing = false; draggingPart = null; render(); };
+canvas.onwheel = (e) => { if (!img) return; e.preventDefault(); const zoom = 1 + (-e.deltaY * 0.001), newScale = Math.max(0.01, scale * zoom), mouseX = e.clientX, mouseY = e.clientY - document.getElementById("toolbar").offsetHeight; offsetX -= (mouseX - offsetX) * (newScale / scale - 1); offsetY -= (mouseY - offsetY) * (newScale / scale - 1); const cX = (cropRect.x - offsetX) / scale, cY = (cropRect.y - offsetY) / scale, cW = cropRect.w / scale, cH = cropRect.h / scale; scale = newScale; cropRect = { x: offsetX + cX * scale, y: offsetY + cY * scale, w: cW * scale, h: cH * scale }; clampCropRect(); render(); };
+function applyPixelBrushLine(x1, y1, x2, y2) { maskCtx.strokeStyle = "black"; maskCtx.lineWidth = parseInt(document.getElementById("brushSize").value); maskCtx.lineCap = "round"; maskCtx.lineJoin = "round"; maskCtx.beginPath(); maskCtx.moveTo(x1, y1); maskCtx.lineTo(x2, y2); maskCtx.stroke(); }
+function commitPixelRect(x1, y1, x2, y2) { maskCtx.fillStyle = "black"; maskCtx.fillRect(Math.min(x1, x2), Math.min(y1, y2), Math.abs(x2 - x1), Math.abs(y2 - y1)); }
+function commitMarker(x1, y1, x2, y2) { editsCtx.save(); editsCtx.beginPath(); editsCtx.moveTo(x1, y1); editsCtx.lineTo(x2, y2); editsCtx.strokeStyle = document.getElementById("markerColor").value; editsCtx.lineWidth = parseInt(document.getElementById("markerWidth").value); editsCtx.lineCap = "round"; editsCtx.stroke(); editsCtx.restore(); }
+function render() { ctx.clearRect(0, 0, canvas.width, canvas.height); if (!img) return; ctx.save(); ctx.translate(offsetX, offsetY); ctx.scale(scale, scale); ctx.drawImage(img, 0, 0); ctx.save(); ctx.globalCompositeOperation = "multiply"; ctx.drawImage(editsCanvas, 0, 0); ctx.restore(); drawFilterLayer(); if (isDrawing === true) { if (activeTool === "marker") { ctx.beginPath(); ctx.moveTo(startX, startY); ctx.lineTo(currentX, currentY); ctx.strokeStyle = document.getElementById("markerColor").value + "88"; ctx.lineWidth = parseInt(document.getElementById("markerWidth").value); ctx.lineCap = "round"; ctx.stroke(); } else if (activeTool === "pixel" && pixelMode === "rect") { ctx.strokeStyle = "rgba(255, 255, 255, 0.5)"; ctx.setLineDash([5, 5]); ctx.strokeRect(Math.min(startX, currentX), Math.min(startY, currentY), Math.abs(currentX - startX), Math.abs(currentY - startY)); } } ctx.restore(); if (showCrop) drawCropFrame(); if (activeTool === "pixel" && pixelMode === "brush" && isMouseOver && !draggingPart && isDrawing !== "pan") { const radius = (parseInt(document.getElementById("brushSize").value) / 2) * scale; ctx.beginPath(); ctx.arc(hoverX, hoverY, radius, 0, Math.PI * 2); ctx.strokeStyle = "white"; ctx.lineWidth = 1; ctx.stroke(); } }
+function drawFilterLayer() { const intensity = Math.max(1, parseInt(document.getElementById("pixelSize").value)), type = filterTypeSelect.value, tCanvas = document.createElement("canvas"); tCanvas.width = img.width; tCanvas.height = img.height; const tCtx = tCanvas.getContext("2d"); if (type === "pixelate") { tCtx.imageSmoothingEnabled = false; tCtx.drawImage(img, 0, 0, img.width/intensity, img.height/intensity); tCtx.drawImage(tCanvas, 0, 0, img.width/intensity, img.height/intensity, 0, 0, img.width, img.height); } else { tCtx.filter = "blur(" + intensity + "px)"; tCtx.drawImage(img, 0, 0); } const fCanvas = document.createElement("canvas"); fCanvas.width = img.width; fCanvas.height = img.height; const fCtx = fCanvas.getContext("2d"); fCtx.drawImage(maskCanvas, 0, 0); fCtx.globalCompositeOperation = "source-in"; fCtx.drawImage(tCanvas, 0, 0); ctx.drawImage(fCanvas, 0, 0); }
+function drawCropFrame() { const {x, y, w, h} = cropRect; ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(0, 0, canvas.width, y); ctx.fillRect(0, y+h, canvas.width, canvas.height-(y+h)); ctx.fillRect(0, y, x, h); ctx.fillRect(x+w, y, canvas.width-(x+w), h); ctx.strokeStyle = "#00ff00"; ctx.lineWidth = 2; ctx.strokeRect(x, y, w, h); ctx.fillStyle = "#00ff00"; const s = 6; ctx.fillRect(x-s, y-s, s*2, s*2); ctx.fillRect(x+w-s, y-s, s*2, s*2); ctx.fillRect(x-s, y+h-s, s*2, s*2); ctx.fillRect(x+w-s, y+h-s, s*2, s*2); ctx.fillStyle = "white"; ctx.font = "bold 12px Arial"; ctx.fillText(Math.round(w/scale) + "x" + Math.round(h/scale) + " px", x, y-10); }
+if (markerBtn) markerBtn.onclick = () => { activeTool = (activeTool === "marker" ? null : "marker"); updateToolButtons(); }; if (brushModeBtn) brushModeBtn.onclick = () => { activeTool = "pixel"; pixelMode = "brush"; updateToolButtons(); }; if (rectModeBtn) rectModeBtn.onclick = () => { activeTool = "pixel"; pixelMode = "rect"; updateToolButtons(); }; if (cropToggleBtn) cropToggleBtn.onclick = () => { showCrop = !showCrop; updateToolButtons(); }; if (aspect32Btn) aspect32Btn.onclick = () => { 
+    lockAspect32 = !lockAspect32; 
+    if (lockAspect32) { 
+        showCrop = true; // Automatically show crop frame
+        cropRect.h = cropRect.w * (2/3); 
+        clampCropRect(); 
+    } 
+    updateToolButtons(); 
+}; if (resetBtn) resetBtn.onclick = () => { 
+    resetView(); 
+    centerCrop(); 
+    if (img) {
+        editsCtx.clearRect(0, 0, img.width, img.height);
+        maskCtx.clearRect(0, 0, img.width, img.height);
+        historyStack = [];
+    }
+    render(); 
+};
+function updateToolButtons() { if (markerBtn) markerBtn.classList.toggle("active", activeTool === "marker"); if (brushModeBtn) brushModeBtn.classList.toggle("active", activeTool === "pixel" && pixelMode === "brush"); if (rectModeBtn) rectModeBtn.classList.toggle("active", activeTool === "pixel" && pixelMode === "rect"); if (cropToggleBtn) cropToggleBtn.classList.toggle("active", showCrop); if (aspect32Btn) aspect32Btn.classList.toggle("active", lockAspect32); render(); }
+if (saveBtn) saveBtn.onclick = () => { if (!img) return; let iX, iY, iW, iH; if (showCrop) { iX = (cropRect.x-offsetX)/scale; iY = (cropRect.y-offsetY)/scale; iW = cropRect.w/scale; iH = cropRect.h/scale; } else { iX = 0; iY = 0; iW = img.width; iH = img.height; } const out = document.createElement("canvas"); out.width = iW; out.height = iH; const oCtx = out.getContext("2d"); oCtx.translate(-iX, -iY); oCtx.drawImage(img, 0, 0); oCtx.save(); oCtx.globalCompositeOperation = "multiply"; oCtx.drawImage(editsCanvas, 0, 0); oCtx.restore(); const intensity = Math.max(1, parseInt(document.getElementById("pixelSize").value)), type = filterTypeSelect.value, t = document.createElement("canvas"), tCtx = t.getContext("2d"); t.width = img.width; t.height = img.height; if (type === "pixelate") { tCtx.imageSmoothingEnabled = false; tCtx.drawImage(img, 0, 0, img.width/intensity, img.height/intensity); tCtx.drawImage(t, 0, 0, img.width/intensity, img.height/intensity, 0, 0, img.width, img.height); } else { tCtx.filter = "blur(" + intensity + "px)"; tCtx.drawImage(img, 0, 0); } const f = document.createElement("canvas"), fCtx = f.getContext("2d"); f.width = img.width; f.height = img.height; fCtx.drawImage(maskCanvas, 0, 0); fCtx.globalCompositeOperation = "source-in"; fCtx.drawImage(t, 0, 0); oCtx.drawImage(f, 0, 0); const link = document.createElement("a"); link.download = "result.png"; link.href = out.toDataURL("image/png"); link.click(); };
+if (infoBtn) infoBtn.onclick = () => infoModal.style.display = "block"; if (closeBtn) closeBtn.onclick = () => infoModal.style.display = "none"; window.onclick = (e) => { if (e.target == infoModal) infoModal.style.display = "none"; }; canvas.oncontextmenu = (e) => e.preventDefault();
+
+
+
+</script>
+</body>
+</html>
+
