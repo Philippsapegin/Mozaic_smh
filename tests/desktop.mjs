@@ -19,7 +19,7 @@ await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
 const port = server.address().port;
 await new Promise((resolve) => server.close(resolve));
 const child = spawn(executable, [], {
-  env: { ...process.env, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}` },
+  env: { ...process.env, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}`, WEBVIEW2_USER_DATA_FOLDER: join(work, 'WebViewProfile') },
   stdio: 'ignore',
 });
 const exec = promisify(execFile);
@@ -55,7 +55,7 @@ try {
   assert.equal(await page.evaluate(() => Boolean(window.isTauri)), true);
   const selectDialog = (title, path) => exec('powershell.exe', [
     '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', resolve('tests/native-dialog.ps1'),
-    '-WindowTitle', title, ...(path ? ['-FilePath', path] : ['-ConfirmOnly']),
+    '-WindowTitle', title, '-AppProcessId', String(child.pid), ...(path ? ['-FilePath', path] : ['-ConfirmOnly']),
   ], { windowsHide: true });
 
   await page.locator('#emptyUploadButton').evaluate((button) => button.click());

@@ -23,6 +23,26 @@ try {
   assert.equal(await page.locator('#emptyState').isVisible(), true);
   assert.equal(await page.locator('[data-tool]').count(), 3);
   assert.equal(await page.locator('.topbar,.tool-rail,.bottom-bar').count(), 0);
+  assert.equal(await page.locator('[title]').count(), 0, 'Native tooltips remain');
+  const creditsStarted = Date.now();
+  await page.locator('#creditsButton').click();
+  assert.equal(await page.locator('#creditsPopover').getAttribute('aria-hidden'), 'false');
+  assert.equal(await page.locator('#creditsPopover').textContent(), 'Юрий Орлов и Филипп Сапегин, специально для Shkulev Media');
+  const questionBounds = await page.locator('#creditsButton').boundingBox();
+  const creditsBounds = await page.locator('#creditsPopover').boundingBox();
+  assert.ok(Math.abs(creditsBounds.x - questionBounds.x) < 30 && questionBounds.y - creditsBounds.y < 70, 'Credits are not beside the clicked question mark');
+  await page.waitForFunction(() => document.getElementById('creditsPopover').getAttribute('aria-hidden') === 'true', null, { timeout: 6500 });
+  assert.ok(Date.now() - creditsStarted >= 4900, 'Credits disappeared before five seconds');
+  for (const [tool, name] of [['mosaic', 'Мозаика'], ['marker', 'Маркер'], ['bubble', 'Баббл']]) {
+    await page.locator(`[data-tool="${tool}"]`).hover();
+    assert.equal(await page.locator('#customTooltip').textContent(), name);
+    assert.equal(await page.locator('#customTooltip').evaluate((element) => getComputedStyle(element).opacity), '1', 'Tooltip appearance is delayed');
+  }
+  await page.mouse.move(700, 100);
+  await page.waitForTimeout(55);
+  const fadingOpacity = await page.locator('#customTooltip').evaluate((element) => Number(getComputedStyle(element).opacity));
+  assert.ok(fadingOpacity > 0 && fadingOpacity < 1, 'Tooltip does not fade on pointer leave');
+  await page.waitForFunction(() => getComputedStyle(document.getElementById('customTooltip')).opacity === '0');
 
   const dataUrl = await page.evaluate(() => {
     const image = document.createElement('canvas');
@@ -79,7 +99,7 @@ try {
   const brushPoint = imagePoint(250, 370);
   await page.mouse.move(brushPoint.x, brushPoint.y);
   await page.mouse.wheel(0, -100);
-  assert.equal(await page.locator('#brushValue').textContent(), '48');
+  assert.equal(await page.locator('#brushValue').inputValue(), '48');
   await drag(brushPoint, imagePoint(500, 390));
   assert.equal((await downloadedBytes()).equals(beforeMosaic), false, 'Mosaic stroke did not change the image');
   await page.locator('#brushRange').focus();
@@ -95,7 +115,7 @@ try {
   await page.locator('[data-tool="marker"]').click();
   await page.mouse.move(brushPoint.x, brushPoint.y);
   await page.mouse.wheel(0, -100);
-  assert.equal(await page.locator('#brushValue').textContent(), '48');
+  assert.equal(await page.locator('#brushValue').inputValue(), '48');
   await drag(imagePoint(180, 165), imagePoint(430, 245));
   await drag(imagePoint(290, 190), imagePoint(580, 265));
   assert.equal(await page.locator('#markerCount').textContent(), '2');
@@ -180,9 +200,50 @@ try {
   await page.locator('#resetCropButton').click();
   assert.deepEqual(await downloadedSize(), [1080, 720]);
 
+  await page.locator('[data-tool="bubble"]').click();
+  await page.locator('#fontValue').fill('34');
+  await page.locator('#fontValue').press('Enter');
+  assert.equal(await page.locator('#fontRange').inputValue(), '34');
+  await page.locator('[data-tool="mosaic"]').click();
+  await page.locator('#grainValue').fill('21');
+  await page.keyboard.press('Control+z');
+  assert.equal(await page.locator('#grainValue').inputValue(), '32', 'Undo did not restore the numeric setting');
+  await page.locator('#grainValue').fill('24');
+  await page.keyboard.press('Control+z');
+  assert.equal(await page.locator('#grainValue').inputValue(), '32', 'A fresh numeric edit was lost after undo');
+  await page.locator('#grainValue').fill('999');
+  await page.locator('#grainValue').press('Enter');
+  assert.equal(await page.locator('#grainValue').inputValue(), '80', 'Numeric input is outside slider bounds');
+  await page.locator('#grainValue').fill('21');
+  await page.locator('#grainValue').press('Enter');
+  await page.locator('#brushValue').fill('76');
+  await page.locator('#brushValue').press('Enter');
+  await page.locator('#brushRange').focus();
+  await page.locator('#brushRange').press('ArrowRight');
+  assert.equal(await page.locator('#brushValue').inputValue(), '77', 'Slider did not update its numeric field');
+  await page.mouse.move(brushPoint.x, brushPoint.y);
+  await page.mouse.wheel(0, -100);
+  assert.equal(await page.locator('#brushValue').inputValue(), '81', 'Wheel did not update the numeric field');
+  for (const name of ['next-document.png', 'third-document.png']) {
+    await page.locator('#fileInput').setInputFiles({
+      name, mimeType: 'image/png', buffer: Buffer.from(dataUrl.split(',')[1], 'base64'),
+    });
+    await page.waitForFunction(() => document.getElementById('bubbleCount').textContent === '0');
+    await page.waitForFunction(() => !document.getElementById('faceStatus').textContent.includes('Ищем'), null, { timeout: 120000 });
+    assert.deepEqual(await page.locator('.range-value').evaluateAll((inputs) => inputs.map((input) => input.value)), ['21', '81', '34'], 'Settings reset on the next image');
+    if (name === 'next-document.png') {
+      await page.locator('[data-tool="bubble"]').click();
+      await page.mouse.click(tip.x, tip.y);
+      assert.equal(await page.locator('#fontValue').inputValue(), '34', 'The next bubble did not inherit the text size');
+      await page.locator('[data-tool="mosaic"]').click();
+    }
+  }
+  await page.keyboard.press('Control+z');
+  assert.deepEqual(await page.locator('.range-value').evaluateAll((inputs) => inputs.map((input) => input.value)), ['21', '81', '34'], 'Undo on a fresh image changed its settings');
+
   assert.deepEqual(errors, []);
   await page.screenshot({ path: 'tests/editor-smoke.png', fullPage: true });
-  process.stdout.write('Smoke test passed: offline face check, mosaic/marker/bubble undo, bubble ink alignment, rotation, crop, PNG export.\n');
+  process.stdout.write('Smoke test passed: credits timer, instant/fading tooltips, numeric controls, settings across three images, offline faces, undo, bubble ink alignment, rotation, crop, PNG export.\n');
 } finally {
   await browser.close();
   await server.close();

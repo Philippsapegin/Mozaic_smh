@@ -13,13 +13,13 @@
           <canvas id="editorCanvas"></canvas>
 
           <nav class="tool-dock" aria-label="Инструменты">
-            <button type="button" class="tool-button active" data-tool="mosaic" aria-label="Мозаика" aria-pressed="true" title="Мозаика (1)">
+            <button type="button" class="tool-button active" data-tool="mosaic" aria-label="Мозаика" aria-pressed="true" data-tooltip="Мозаика">
               <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
             </button>
-            <button type="button" class="tool-button" data-tool="marker" aria-label="Маркер" aria-pressed="false" title="Маркер (2)">
+            <button type="button" class="tool-button" data-tool="marker" aria-label="Маркер" aria-pressed="false" data-tooltip="Маркер">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17.5 17.5 4l2.5 2.5L6.5 20H4v-2.5Z"/><path d="M13.5 8 16 10.5"/></svg>
             </button>
-            <button type="button" class="tool-button" data-tool="bubble" aria-label="Баббл" aria-pressed="false" title="Баббл (3)">
+            <button type="button" class="tool-button" data-tool="bubble" aria-label="Баббл" aria-pressed="false" data-tooltip="Баббл">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v12H9l-5 4V5Z"/><path d="M8 9h8M8 13h5"/></svg>
             </button>
           </nav>
@@ -32,16 +32,17 @@
           </div>
           <div class="drop-overlay" id="dropOverlay">Отпустите файл для загрузки</div>
           <div class="stage-hint" id="stageHint">ЛКМ — мозаика · ПКМ — стереть · Колесо — размер кисти</div>
+          <button type="button" class="credits-button" id="creditsButton" aria-label="Авторы" aria-controls="creditsPopover" aria-expanded="false" data-tooltip="Авторы">?</button>
 
           <div class="bottom-console" role="toolbar" aria-label="Работа с изображением">
-            <button type="button" class="console-button" id="uploadButton" title="Загрузить другое изображение" aria-label="Загрузить другое изображение">
+            <button type="button" class="console-button" id="uploadButton" data-tooltip="Загрузить другое изображение" aria-label="Загрузить другое изображение">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4z"/><path d="m4 16 5-5 4 4 3-3 4 4"/><path d="M16.5 8h.01"/></svg>
             </button>
             <span class="console-divider"></span>
-            <button type="button" class="console-button" id="cropButton" title="Настроить обрезку" aria-label="Настроить обрезку">▣</button>
-            <button type="button" class="console-button hidden" id="resetCropButton" title="Сбросить обрезку" aria-label="Сбросить обрезку">×</button>
-            <button type="button" class="console-button" id="rotateLeftButton" title="Повернуть влево на 90°" aria-label="Повернуть влево">↶</button>
-            <button type="button" class="console-button" id="rotateRightButton" title="Повернуть вправо на 90°" aria-label="Повернуть вправо">↷</button>
+            <button type="button" class="console-button" id="cropButton" data-tooltip="Настроить обрезку" aria-label="Настроить обрезку">▣</button>
+            <button type="button" class="console-button hidden" id="resetCropButton" data-tooltip="Сбросить обрезку" aria-label="Сбросить обрезку">×</button>
+            <button type="button" class="console-button" id="rotateLeftButton" data-tooltip="Повернуть влево на 90°" aria-label="Повернуть влево">↶</button>
+            <button type="button" class="console-button" id="rotateRightButton" data-tooltip="Повернуть вправо на 90°" aria-label="Повернуть вправо">↷</button>
             <span class="console-divider"></span>
             <button type="button" class="save-button" id="saveButton">Сохранить PNG</button>
           </div>
@@ -52,12 +53,18 @@
       <aside class="inspector" aria-label="Настройки инструмента">
         <section class="inspector-panel" id="mosaicPanel">
           <div class="control-block">
-            <div class="control-label"><label for="grainRange">Размер квадрата</label><output id="grainValue">32</output></div>
-            <input id="grainRange" type="range" min="6" max="80" value="32" />
+            <div class="control-label"><label for="grainRange">Размер квадрата</label></div>
+            <div class="range-row">
+              <input id="grainRange" type="range" min="6" max="80" value="32" />
+              <input id="grainValue" class="range-value" type="number" min="6" max="80" step="1" value="32" aria-label="Размер квадрата числом" />
+            </div>
           </div>
           <div class="control-block">
-            <div class="control-label"><label for="brushRange">Размер кисти</label><output id="brushValue">44</output></div>
-            <input id="brushRange" type="range" min="8" max="180" value="44" />
+            <div class="control-label"><label for="brushRange">Размер кисти</label></div>
+            <div class="range-row">
+              <input id="brushRange" type="range" min="8" max="180" value="44" />
+              <input id="brushValue" class="range-value" type="number" min="8" max="180" step="1" value="44" aria-label="Размер кисти числом" />
+            </div>
           </div>
           <div class="list-heading">Найденные лица <span id="faceCount">0</span></div>
           <div class="face-status" id="faceStatus" role="status">Загрузите изображение.</div>
@@ -74,10 +81,13 @@
             <label class="field-label" for="bubbleText">Текст</label>
             <textarea id="bubbleText" rows="5" wrap="off" placeholder="Кликните по изображению"></textarea>
             <div class="control-block">
-              <div class="control-label"><label for="fontRange">Размер текста</label><output id="fontValue">26</output></div>
-              <input id="fontRange" type="range" min="16" max="48" value="26" />
+              <div class="control-label"><label for="fontRange">Размер текста</label></div>
+              <div class="range-row">
+                <input id="fontRange" type="range" min="16" max="48" value="26" />
+                <input id="fontValue" class="range-value" type="number" min="16" max="48" step="1" value="26" aria-label="Размер текста числом" />
+              </div>
             </div>
-            <button type="button" class="bold-button" id="boldButton" aria-label="Жирный текст" aria-pressed="false" title="Жирный текст"><strong>B</strong></button>
+            <button type="button" class="bold-button" id="boldButton" aria-label="Жирный текст" aria-pressed="false" data-tooltip="Жирный текст"><strong>B</strong></button>
           </div>
           <div class="list-heading">Бабблы <span id="bubbleCount">0</span></div>
           <div class="bubble-list" id="bubbleList"></div>
@@ -85,6 +95,8 @@
       </aside>
     </div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <div class="custom-tooltip" id="customTooltip" role="tooltip" aria-hidden="true"></div>
+    <div class="credits-popover" id="creditsPopover" role="status" aria-live="polite" aria-hidden="true">Юрий Орлов и Филипп Сапегин, специально для Shkulev Media</div>
     <script type="module" src="/src/app.js"></script>
   </body>
 </html>

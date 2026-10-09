@@ -8,6 +8,7 @@
 body{margin:0;min-width:360px}
 button,input,textarea{font:inherit}
 button{cursor:pointer}
+button:focus-visible{outline:0;filter:brightness(1.3)}
 button:disabled{opacity:.38;cursor:not-allowed}
 .hidden{display:none!important}
 .app{height:100dvh;min-height:500px;display:flex;overflow:hidden}
@@ -16,12 +17,12 @@ button:disabled{opacity:.38;cursor:not-allowed}
 #editorCanvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 
 .tool-dock{position:absolute;left:16px;top:50%;transform:translateY(-50%);z-index:5;display:flex;flex-direction:column;gap:8px}
-.tool-button{width:48px;height:48px;display:grid;place-items:center;border:1px solid #44494a;border-radius:12px;background:#262a2ccf;color:#c2c7c4;box-shadow:0 5px 16px #0004;backdrop-filter:blur(12px)}
+.tool-button{width:48px;height:48px;display:grid;place-items:center;border:0;border-radius:12px;background:#262a2ccf;color:#c2c7c4;box-shadow:0 5px 16px #0004;backdrop-filter:blur(12px)}
 .tool-button:hover{background:#363a3b;color:#fff}
-.tool-button.active{background:#3b2926;border-color:#a5543e;color:#ff7753}
+.tool-button.active{background:#3b2926;color:#ff7753}
 .tool-button svg,.console-button svg,.empty-icon svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 
-.empty-state{position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);width:min(90%,370px);padding:42px 27px 38px;border-radius:17px;border:1px solid #3b4040;background:#222628;box-shadow:0 24px 70px #0006;display:flex;align-items:center;flex-direction:column;text-align:center;z-index:2}
+.empty-state{position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);width:min(90%,370px);padding:42px 27px 38px;border-radius:17px;border:0;background:#222628;box-shadow:0 24px 70px #0006;display:flex;align-items:center;flex-direction:column;text-align:center;z-index:2}
 .empty-icon{width:56px;height:56px;display:grid;place-items:center;margin-bottom:18px;border-radius:15px;background:#3a2b27;color:#ff7b55}
 .empty-icon svg{width:27px;height:27px}
 .empty-state h1{font-size:20px;margin:0 0 7px;font-weight:650;letter-spacing:-.025em}
@@ -29,12 +30,12 @@ button:disabled{opacity:.38;cursor:not-allowed}
 .button{border:0;border-radius:9px;font-size:12px;font-weight:700}
 .button-primary{height:38px;padding:0 18px;background:#ec613c;color:#fff}
 .button-primary:hover,.save-button:hover{background:#fa7450}
-.drop-overlay{display:none;position:absolute;inset:16px;z-index:8;border:2px dashed #e8714b;border-radius:14px;background:#1e2222ef;color:#ff8964;font-size:20px;font-weight:650;align-items:center;justify-content:center;pointer-events:none}
+.drop-overlay{display:none;position:absolute;inset:16px;z-index:8;border:0;border-radius:14px;background:#1e2222ef;color:#ff8964;font-size:20px;font-weight:650;align-items:center;justify-content:center;pointer-events:none}
 .stage.drag-over .drop-overlay{display:flex}
 .stage-hint{position:absolute;bottom:77px;left:50%;transform:translateX(-50%);padding:7px 11px;border-radius:7px;background:#111416d9;color:#d3d9d5;font-size:10px;white-space:nowrap;pointer-events:none;z-index:3}
 .stage.no-image .stage-hint{display:none}
 
-.bottom-console{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);z-index:5;display:flex;align-items:center;gap:3px;height:48px;padding:5px;border:1px solid #505655;border-radius:13px;background:#292d2eef;box-shadow:0 12px 32px #0008;backdrop-filter:blur(16px)}
+.bottom-console{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);z-index:5;display:flex;align-items:center;gap:3px;height:48px;padding:5px;border:0;border-radius:13px;background:#292d2eef;box-shadow:0 12px 32px #0008;backdrop-filter:blur(16px)}
 .console-button{width:36px;height:36px;display:grid;place-items:center;border:0;border-radius:8px;background:transparent;color:#ccd0cd;font-size:23px;line-height:1}
 .console-button:hover:not(:disabled){background:#414747;color:#fff}
 .console-button.active{background:#51332d;color:#ff865d}
@@ -42,20 +43,29 @@ button:disabled{opacity:.38;cursor:not-allowed}
 .console-divider{width:1px;height:20px;background:#555b59;margin:0 3px}
 .save-button{height:36px;padding:0 13px;margin-left:2px;border:0;border-radius:8px;background:#e96642;color:#fff;font-size:11px;font-weight:700;white-space:nowrap}
 
-.inspector{width:274px;flex:none;height:100%;overflow:auto;scrollbar-width:thin;scrollbar-color:#44494a transparent;border-left:1px solid #383d3e;background:#202325}
+.inspector{width:274px;flex:none;height:100%;overflow:auto;scrollbar-width:thin;scrollbar-color:#44494a transparent;border:0;background:#202325}
 .inspector-panel{padding:27px 20px 24px}
-.control-block{margin:0 0 25px}
-.control-label{display:flex;justify-content:space-between;align-items:center;margin-bottom:13px;color:#d5dad6;font-size:11px;font-weight:650}
-.control-label output{color:#ff8059;font-size:12px;font-weight:700}
-input[type=range]{width:100%;height:4px;accent-color:#f2704b;cursor:pointer}
+.control-block{margin:0 0 18px}
+.control-label{margin-bottom:4px;color:#d5dad6;font-size:11px;font-weight:650}
+.range-row{display:flex;align-items:center;gap:9px}
+input[type=range]{flex:1;min-width:0;width:100%;height:24px;margin:0;appearance:none;border:0;outline:0;background:linear-gradient(to right,#f2704b var(--range-progress),#535d59 var(--range-progress)) center/100% 3px no-repeat;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:3px;border:0;background:transparent}
+input[type=range]::-webkit-slider-thumb{appearance:none;width:13px;height:13px;margin-top:-5px;border:0;border-radius:50%;background:#f2704b}
+input[type=range]::-moz-range-track{height:3px;border:0;background:transparent}
+input[type=range]::-moz-range-thumb{width:13px;height:13px;border:0;border-radius:50%;background:#f2704b}
+input[type=range]:focus-visible::-webkit-slider-thumb{background:#ffab89}
+input[type=range]:focus-visible::-moz-range-thumb{background:#ffab89}
+.range-value{flex:none;width:43px;height:25px;padding:3px 5px;border:0;border-radius:5px;outline:0;background:#2b302f;color:#ff8059;font-size:12px;font-weight:700;text-align:right;appearance:textfield}
+.range-value:focus{background:#3a4240;color:#ffac88}
+.range-value::-webkit-inner-spin-button,.range-value::-webkit-outer-spin-button{appearance:none;margin:0}
 .list-heading{display:flex;align-items:center;gap:6px;margin:18px 0 13px;color:#e4e8e4;font-size:12px;font-weight:700}
 .list-heading span{font-weight:500;color:#949d97}
-.face-status,.empty-list{padding:13px 9px;border:1px solid #343a3a;border-radius:8px;color:#939d98;background:#272b2c;font-size:11px;line-height:1.45;text-align:center}
+.face-status,.empty-list{padding:13px 9px;border:0;border-radius:8px;color:#939d98;background:#272b2c;font-size:11px;line-height:1.45;text-align:center}
 .face-status:empty{display:none}
 .face-list,.marker-list,.bubble-list{display:flex;flex-direction:column;gap:7px}
-.face-row{min-height:60px;display:flex;align-items:center;gap:9px;padding:6px;border:1px solid #3a4040;border-radius:9px;background:#282c2d;cursor:pointer;text-align:left}
-.face-row:hover,.list-row:hover{border-color:#666d68}
-.face-row.selected,.list-row.selected{border-color:#d97553;background:#352b28}
+.face-row{min-height:60px;display:flex;align-items:center;gap:9px;padding:6px;border:0;border-radius:9px;background:#282c2d;cursor:pointer;text-align:left}
+.face-row:hover,.list-row:hover{background:#343a37}
+.face-row.selected,.list-row.selected{background:#352b28}
 .face-thumb{width:49px;height:46px;object-fit:cover;flex:none;border-radius:5px;background:#3d4141}
 .face-name{flex:1;color:#dee3df;font-size:11px;font-weight:650}
 .switch{position:relative;display:inline-block;width:33px;height:19px;flex:none}
@@ -63,21 +73,28 @@ input[type=range]{width:100%;height:4px;accent-color:#f2704b;cursor:pointer}
 .switch span{position:absolute;inset:0;border-radius:12px;background:#59605d;transition:background .18s}
 .switch span::after{content:"";position:absolute;left:3px;top:3px;width:13px;height:13px;border-radius:50%;background:#eef1ed;transition:transform .18s}
 .switch input:checked+span{background:#ed704a}.switch input:checked+span::after{transform:translateX(14px)}
-.list-row{min-height:35px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border:1px solid #3a4040;border-radius:8px;background:#282c2d;color:#d9deda;font-size:11px}
+.list-row{min-height:35px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border:0;border-radius:8px;background:#282c2d;color:#d9deda;font-size:11px}
 .list-row>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .list-row button{flex:none;border:0;background:none;color:#919a94;font-size:17px;line-height:1;padding:0 2px}
 .list-row button:hover{color:#ff845f}
 .bubble-list .list-row{cursor:pointer}
 .field-label{display:block;margin-bottom:9px;color:#dbe1dc;font-size:11px;font-weight:650}
-.bubble-editor textarea{width:100%;min-height:105px;resize:vertical;margin:0 0 23px;padding:10px;border:1px solid #48504d;border-radius:8px;outline:0;background:#292d2e;color:#f0f2ee;font-family:"Roboto Condensed",Arial,sans-serif;font-size:16px;line-height:1.3;white-space:pre;overflow-x:auto;overflow-wrap:normal}
-.bubble-editor textarea:focus{border-color:#ef7752;box-shadow:0 0 0 2px #ed73462a}
+.bubble-editor textarea{width:100%;min-height:105px;resize:vertical;margin:0 0 23px;padding:10px;border:0;border-radius:8px;outline:0;background:#292d2e;color:#f0f2ee;font-family:"Roboto Condensed",Arial,sans-serif;font-size:16px;line-height:1.3;white-space:pre;overflow-x:auto;overflow-wrap:normal}
+.bubble-editor textarea:focus{background:#343b38}
 .bubble-editor textarea:disabled{opacity:.55}
 .bubble-editor .control-block{margin-bottom:17px}
-.bold-button{display:grid;place-items:center;width:35px;height:32px;margin-bottom:25px;border:1px solid #4d5550;border-radius:7px;background:#292e2e;color:#dce1dc;font-family:"Roboto Condensed",Arial,sans-serif;font-size:16px}
+.bold-button{display:grid;place-items:center;width:35px;height:32px;margin-bottom:25px;border:0;border-radius:7px;background:#292e2e;color:#dce1dc;font-family:"Roboto Condensed",Arial,sans-serif;font-size:16px}
 .bold-button:hover{background:#363c3b}
-.bold-button.active{border-color:#d57b59;background:#4b312a;color:#ff8d68}
+.bold-button.active{background:#4b312a;color:#ff8d68}
 
-.toast{position:fixed;bottom:82px;left:50%;transform:translate(-50%,10px);z-index:20;padding:9px 13px;border:1px solid #515956;border-radius:8px;background:#2a302e;color:#f1f4ef;box-shadow:0 10px 30px #0007;font-size:11px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s}
+.toast{position:fixed;bottom:82px;left:50%;transform:translate(-50%,10px);z-index:20;padding:9px 13px;border:0;border-radius:8px;background:#2a302e;color:#f1f4ef;box-shadow:0 10px 30px #0007;font-size:11px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s}
 .toast.visible{opacity:1;transform:translate(-50%,0)}
+.credits-button{position:absolute;left:20px;bottom:30px;z-index:5;display:grid;place-items:center;width:24px;height:24px;padding:0;border:0;border-radius:50%;background:#292e2eef;color:#a7b0ab;font-size:13px;font-weight:650;line-height:1}
+.credits-button:hover{background:#3a4240;color:#eef1ed}
+.custom-tooltip,.credits-popover{position:fixed;z-index:30;max-width:calc(100vw - 16px);padding:8px 11px;border:0;border-radius:8px;background:#303735;color:#eef1ed;box-shadow:0 6px 22px #0006;font-size:11px;line-height:1.45;opacity:0;pointer-events:none;transform:translateY(4px);transition:opacity .18s ease-out,transform .18s ease-out}
+.custom-tooltip{max-width:min(260px,calc(100vw - 16px));width:max-content}
+.credits-popover{max-width:min(430px,calc(100vw - 16px));width:max-content;z-index:25}
+.custom-tooltip.visible,.credits-popover.visible{opacity:1;transform:translateY(0)}
+.custom-tooltip.visible{transition-duration:0s}
 @media(max-width:780px){.inspector{width:230px}.inspector-panel{padding:19px 14px}.tool-dock{left:9px}.tool-button{width:42px;height:42px}.stage-hint{display:none}}
 @media(max-width:560px){.inspector{width:190px}.bottom-console{left:calc(50% + 18px);gap:1px;padding:3px}.console-button{width:30px}.save-button{padding:0 8px;font-size:10px}.empty-state{width:min(90%,290px);padding:26px 12px}.empty-state h1{font-size:17px}.tool-dock{top:16px;transform:none}}

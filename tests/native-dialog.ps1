@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$WindowTitle, [string]$FilePath, [switch]$ConfirmOnly)
+param([Parameter(Mandatory=$true)][string]$WindowTitle, [string]$FilePath, [switch]$ConfirmOnly, [int]$AppProcessId)
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 Add-Type @'
@@ -9,14 +9,28 @@ using System.Collections.Generic;
 using System.Threading;
 public static class NativeDialogWindow {
     private delegate bool EnumWindowCallback(IntPtr handle, IntPtr parameter);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr FindWindow(string className, string windowName);
+    [DllImport("user32.dll")] private static extern bool EnumWindows(EnumWindowCallback callback, IntPtr parameter);
+    [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr handle, out uint processId);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr handle, StringBuilder title, int count);
     [DllImport("user32.dll")] private static extern bool EnumChildWindows(IntPtr parent, EnumWindowCallback callback, IntPtr parameter);
     [DllImport("user32.dll")] private static extern int GetDlgCtrlID(IntPtr handle);
     [DllImport("user32.dll")] private static extern IntPtr GetDlgItem(IntPtr handle, int id);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassName(IntPtr handle, StringBuilder name, int count);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr SendMessage(IntPtr handle, uint message, IntPtr wparam, string text);
     [DllImport("user32.dll")] private static extern bool PostMessage(IntPtr handle, uint message, IntPtr wparam, IntPtr lparam);
-    public static IntPtr Find(string title) { return FindWindow(null, title); }
+    public static IntPtr Find(string title, int processId) {
+        var found = IntPtr.Zero;
+        EnumWindows((handle, parameter) => {
+            uint owner; GetWindowThreadProcessId(handle, out owner);
+            if (owner == processId) {
+                var windowTitle = new StringBuilder(512);
+                GetWindowText(handle, windowTitle, 512);
+                if (windowTitle.ToString() == title) { found = handle; return false; }
+            }
+            return true;
+        }, IntPtr.Zero);
+        return found;
+    }
     public static void FillAndSubmit(IntPtr dialog, string path) {
         IntPtr edit = IntPtr.Zero;
         var editControls = new List<string>();
@@ -42,7 +56,7 @@ public static class NativeDialogWindow {
 $handle = [IntPtr]::Zero
 $deadline = [DateTime]::UtcNow.AddSeconds(20)
 while ($handle -eq [IntPtr]::Zero -and [DateTime]::UtcNow -lt $deadline) {
-    $handle = [NativeDialogWindow]::Find($WindowTitle)
+    $handle = [NativeDialogWindow]::Find($WindowTitle, $AppProcessId)
     if ($handle -eq [IntPtr]::Zero) { Start-Sleep -Milliseconds 100 }
 }
 if ($handle -eq [IntPtr]::Zero) { throw "Native dialog not found: $WindowTitle" }

@@ -3,6 +3,7 @@ import { clamp, expandedFaceBox, imageUnit, normalizeRect, pointInRect, resizeCr
 import './style.css';
 import { detectFacesOffline } from './offline-faces.js';
 import { bindNativeDrops, chooseImage, desktop, saveImage } from './platform.js';
+import { bindInterface, syncRange } from './interface.js';
 
 const $ = (id) => document.getElementById(id);
 const stage = $('stage');
@@ -32,6 +33,7 @@ let pointerAction = null;
 let draftMarker = null;
 let hover = null;
 let textEditSession = false;
+let rangeEditSession = null;
 let renderScheduled = false;
 let toastTimeout = null;
 
@@ -98,10 +100,8 @@ function remember() {
 function restore(next) {
   const rotationChanged = state.rotation !== next.rotation;
   state = next;
+  rangeEditSession = null;
   if (rotationChanged) rebuildBase();
-  grainRange.value = String(state.grain);
-  brushRange.value = String(state.brushSize);
-  fontRange.value = String(state.fontSize);
   cache.pixelDirty = true;
   cache.mosaicDirty = true;
   cache.markerDirty = true;
@@ -174,12 +174,15 @@ async function loadFile(file) {
     if (sourceBitmap) sourceBitmap.close();
     sourceBitmap = bitmap;
     sourceName = file.name.replace(/\.[^.]+$/, '') || 'изображение';
-    state = freshState();
+    const settings = { grain: state.grain, brushSize: state.brushSize, fontSize: Number(fontRange.value) };
+    state = { ...freshState(), ...settings };
     undoStack = [];
     redoStack = [];
     nextId = 1;
     draftMarker = null;
     pointerAction = null;
+    rangeEditSession = null;
+    textEditSession = false;
     rebuildBase();
     const { w, h } = size();
     state.crop = { x: 0, y: 0, w, h };
@@ -430,9 +433,8 @@ function makeFaceThumb(box) {
 }
 
 function updatePanels() {
-  $('grainValue').textContent = state.grain;
-  $('brushValue').textContent = state.brushSize;
-  $('fontValue').textContent = state.fontSize;
+  syncRange(grainRange, $('grainValue'), state.grain);
+  syncRange(brushRange, $('brushValue'), state.brushSize);
   $('faceCount').textContent = state.faces.length;
   $('markerCount').textContent = state.markers.length;
   $('bubbleCount').textContent = state.bubbles.length;
@@ -499,7 +501,8 @@ function updatePanels() {
       const remove = document.createElement('button');
       remove.type = 'button';
       remove.textContent = '×';
-      remove.title = `Удалить выделение ${index + 1}`;
+      remove.dataset.tooltip = `Удалить выделение ${index + 1}`;
+      remove.setAttribute('aria-label', remove.dataset.tooltip);
       remove.addEventListener('click', () => {
         remember();
         state.markers = state.markers.filter((entry) => entry.id !== marker.id);
@@ -527,7 +530,8 @@ function updatePanels() {
       const remove = document.createElement('button');
       remove.type = 'button';
       remove.textContent = '×';
-      remove.title = `Удалить баббл ${index + 1}`;
+      remove.dataset.tooltip = `Удалить баббл ${index + 1}`;
+      remove.setAttribute('aria-label', remove.dataset.tooltip);
       remove.addEventListener('click', (event) => {
         event.stopPropagation();
         deleteBubble(bubble.id);
@@ -546,9 +550,7 @@ function updatePanels() {
   const selected = state.bubbles.find((bubble) => bubble.id === state.selectedBubbleId);
   bubbleText.disabled = !selected;
   bubbleText.value = selected?.text ?? '';
-  fontRange.disabled = !selected;
-  fontRange.value = String(selected?.fontSize ?? state.fontSize);
-  $('fontValue').textContent = selected?.fontSize ?? state.fontSize;
+  syncRange(fontRange, $('fontValue'), selected?.fontSize ?? state.fontSize);
   $('boldButton').disabled = !selected;
   $('boldButton').classList.toggle('active', Boolean(selected?.bold));
   $('boldButton').setAttribute('aria-pressed', String(Boolean(selected?.bold)));
@@ -1121,18 +1123,43 @@ async function savePng() {
   }
 }
 
-function bindRange(range, onValue) {
-  let editing = false;
-  range.addEventListener('input', () => {
-    if (!editing && baseCanvas) {
+function bindRange(range, number, onValue) {
+  const apply = (value) => {
+    if (rangeEditSession !== range && baseCanvas) {
       remember();
-      editing = true;
     }
-    onValue(Number(range.value));
+    rangeEditSession = range;
+    onValue(value);
+    syncRange(range, number, value);
     requestRender();
+  };
+  const finish = () => {
+    if (rangeEditSession === range) rangeEditSession = null;
+    updateControls();
+  };
+  const commitNumber = () => {
+    const value = Number.isFinite(number.valueAsNumber)
+      ? clamp(Math.round(number.valueAsNumber), Number(range.min), Number(range.max)) : Number(range.value);
+    if (value !== Number(range.value)) apply(value);
+    else syncRange(range, number, value);
+    finish();
+  };
+  range.addEventListener('input', () => apply(Number(range.value)));
+  range.addEventListener('change', finish);
+  range.addEventListener('blur', finish);
+  number.addEventListener('input', () => {
+    const value = number.valueAsNumber;
+    if (Number.isInteger(value) && value >= Number(range.min) && value <= Number(range.max) && value !== Number(range.value)) apply(value);
   });
-  range.addEventListener('change', () => { editing = false; updateControls(); });
-  range.addEventListener('blur', () => { editing = false; });
+  number.addEventListener('change', commitNumber);
+  number.addEventListener('blur', commitNumber);
+  number.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      commitNumber();
+      number.blur();
+    }
+  });
 }
 
 function bindEvents() {
@@ -1220,24 +1247,21 @@ function bindEvents() {
     requestRender();
   });
 
-  bindRange(grainRange, (value) => {
+  bindRange(grainRange, $('grainValue'), (value) => {
     state.grain = value;
-    $('grainValue').textContent = value;
     cache.pixelDirty = true;
     cache.mosaicDirty = true;
   });
-  bindRange(brushRange, (value) => {
+  bindRange(brushRange, $('brushValue'), (value) => {
     state.brushSize = value;
-    $('brushValue').textContent = value;
   });
-  bindRange(fontRange, (value) => {
+  bindRange(fontRange, $('fontValue'), (value) => {
     const selected = state.bubbles.find((bubble) => bubble.id === state.selectedBubbleId);
     state.fontSize = value;
     if (selected) {
       selected.fontSize = value;
       keepBubbleInFrame(selected);
     }
-    $('fontValue').textContent = value;
   });
   bubbleText.addEventListener('focus', () => { textEditSession = false; });
   bubbleText.addEventListener('blur', () => { textEditSession = false; updatePanels(); });
@@ -1269,8 +1293,7 @@ function bindEvents() {
     if (!baseCanvas || state.tool !== 'mosaic' || state.cropEditing) return;
     const ticks = Math.max(1, Math.round(Math.abs(event.deltaY) / 100));
     state.brushSize = clamp(state.brushSize + (event.deltaY < 0 ? 1 : -1) * ticks * 4, 8, 180);
-    brushRange.value = String(state.brushSize);
-    $('brushValue').textContent = state.brushSize;
+    syncRange(brushRange, $('brushValue'), state.brushSize);
     requestRender();
   }, { passive: false });
 
@@ -1304,6 +1327,7 @@ function bindEvents() {
 
 stage.classList.add('no-image');
 bindEvents();
+bindInterface();
 updateToolUI();
 updatePanels();
 updateControls();
