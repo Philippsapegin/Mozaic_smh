@@ -1,6 +1,6 @@
 {
   "name": "mozaic-editor",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,7 +13,9 @@
     "desktop:build": "node scripts/desktop.mjs build",
     "postdesktop:build": "node scripts/package-release.mjs",
     "tauri": "node scripts/desktop.mjs",
-    "test": "node tests/smoke.mjs"
+    "test": "node tests/smoke.mjs",
+    "test:updates": "node tests/updates.mjs",
+    "release": "node scripts/publish-release.mjs"
   },
   "dependencies": {
     "@fontsource/roboto-condensed": "^5.2.8",
@@ -21,6 +23,8 @@
     "@tauri-apps/api": "^2.12.1",
     "@tauri-apps/plugin-dialog": "^2.8.1",
     "@tauri-apps/plugin-fs": "^2.6.0",
+    "@tauri-apps/plugin-process": "^2.4.0",
+    "@tauri-apps/plugin-updater": "^2.13.3",
     "onnxruntime-web": "^1.30.0"
   },
   "devDependencies": {

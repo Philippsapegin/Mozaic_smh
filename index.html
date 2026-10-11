@@ -103,6 +103,16 @@
     </div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <div class="custom-tooltip" id="customTooltip" role="tooltip" aria-hidden="true"></div>
+    <aside class="update-notice hidden" id="updateNotice" aria-label="Обновление Мозаики">
+      <button type="button" class="update-dismiss" id="updateDismiss" aria-label="Напомнить позже" data-tooltip="Напомнить позже">×</button>
+      <div class="update-title" id="updateTitle"></div>
+      <p class="update-message" id="updateMessage" role="status" aria-live="polite"></p>
+      <div class="update-actions">
+        <button type="button" class="button button-primary" id="updateButton">Обновить</button>
+        <button type="button" class="button update-save hidden" id="updateSaveButton">Сохранить PNG</button>
+      </div>
+      <progress class="hidden" id="updateProgress" aria-label="Загрузка обновления"></progress>
+    </aside>
     <script type="module" src="/src/app.js"></script>
   </body>
 </html>

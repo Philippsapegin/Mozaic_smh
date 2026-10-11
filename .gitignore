@@ -7,3 +7,7 @@ src-tauri/target/
 src-tauri/gen/
 public/ort/
 release/
+app/
+/Установить Мозаику.exe
+*.key
+*.key.pub

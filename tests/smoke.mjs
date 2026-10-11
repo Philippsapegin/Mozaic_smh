@@ -179,6 +179,7 @@ try {
   await page.locator('#markerWidthValue').press('Enter');
   assert.equal(await page.locator('#markerWidthRange').inputValue(), '52');
 
+  const beforeBubble = await downloadedBytes();
   await page.locator('[data-tool="bubble"]').click();
   const tip = imagePoint(700, 410);
   await page.mouse.click(tip.x, tip.y);
@@ -191,6 +192,14 @@ try {
   await page.keyboard.press('Control+Shift+z');
   assert.equal(await page.locator('#bubbleText').inputValue(), 'ПРОВЕРКА');
   const bubblePng = await downloadedBytes();
+  const shadowPoints = [[800, 365], [705, 415], [735, 335]];
+  const originalShadowPixels = await pixelsAt(beforeBubble, shadowPoints);
+  const bubbleShadowPixels = await pixelsAt(bubblePng, shadowPoints);
+  for (const [index, label] of [[0, 'body'], [1, 'tail']]) {
+    const brightness = (pixel) => pixel[0] + pixel[1] + pixel[2];
+    assert.ok(brightness(bubbleShadowPixels[index]) <= brightness(originalShadowPixels[index]) - 3, `The exported ${label} has no shadow`);
+  }
+  assert.deepEqual(bubbleShadowPixels[2], [255, 255, 255, 255], 'A tail shadow darkened the bubble body');
   const bubblePadding = await page.evaluate(async (dataUrl) => {
     const image = new Image();
     image.src = dataUrl;

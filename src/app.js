@@ -4,6 +4,7 @@ import './style.css';
 import { detectFacesOffline } from './offline-faces.js';
 import { bindNativeDrops, chooseImage, desktop, saveImage } from './platform.js';
 import { bindInterface, syncRange } from './interface.js';
+import { bindUpdates } from './updates.js';
 
 const $ = (id) => document.getElementById(id);
 const stage = $('stage');
@@ -761,17 +762,23 @@ function drawBubble(context, bubble, isExport = false) {
   const { rect, lines, font, lineHeight, padX, firstBaseline } = metrics;
   context.fillStyle = '#fff';
   const base = tailBase(rect, bubble.tip);
+  context.beginPath();
   if (base) {
-    context.beginPath();
     context.moveTo(base[0].x, base[0].y);
     context.lineTo(base[1].x, base[1].y);
     context.lineTo(bubble.tip.x, bubble.tip.y);
     context.closePath();
-    context.fill();
   }
-  context.beginPath();
   context.roundRect(rect.x, rect.y, rect.w, rect.h, imageUnit(10, size().w));
+  const transform = context.getTransform();
+  const scale = Math.hypot(transform.a, transform.b);
+  context.shadowColor = 'rgba(0, 0, 0, .24)';
+  context.shadowBlur = imageUnit(16, size().w) * scale;
+  context.shadowOffsetY = imageUnit(5, size().w) * scale;
   context.fill();
+  context.shadowColor = 'transparent';
+  context.shadowBlur = 0;
+  context.shadowOffsetY = 0;
   context.fillStyle = bubble.text ? '#303030' : '#a5aaa5';
   context.textBaseline = 'alphabetic';
   context.font = `${bubble.bold ? 700 : 400} ${font}px "Roboto Condensed", Arial, sans-serif`;
@@ -1408,6 +1415,7 @@ function bindEvents() {
 stage.classList.add('no-image');
 bindEvents();
 bindInterface();
+bindUpdates({ hasImage: () => Boolean(baseCanvas) });
 updateToolUI();
 updatePanels();
 updateControls();
