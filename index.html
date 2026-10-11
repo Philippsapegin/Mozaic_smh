@@ -32,7 +32,7 @@
           </div>
           <div class="drop-overlay" id="dropOverlay">Отпустите файл для загрузки</div>
           <div class="stage-hint" id="stageHint">ЛКМ — мозаика · ПКМ — стереть · Колесо — размер кисти</div>
-          <button type="button" class="credits-button" id="creditsButton" aria-label="Авторы" aria-controls="creditsPopover" aria-expanded="false" data-tooltip="Авторы">?</button>
+          <span class="credits-button" id="creditsButton" tabindex="0" aria-label="Юрий Орлов и Филипп Сапегин, специально для Shkulev Media" data-tooltip="Юрий Орлов и Филипп Сапегин, специально для Shkulev Media">?</span>
 
           <div class="bottom-console" role="toolbar" aria-label="Работа с изображением">
             <button type="button" class="console-button" id="uploadButton" data-tooltip="Загрузить другое изображение" aria-label="Загрузить другое изображение">
@@ -72,7 +72,14 @@
         </section>
 
         <section class="inspector-panel hidden" id="markerPanel">
-          <div class="list-heading">Прямоугольники <span id="markerCount">0</span></div>
+          <div class="control-block">
+            <div class="control-label"><label for="markerWidthRange">Толщина линии</label></div>
+            <div class="range-row">
+              <input id="markerWidthRange" type="range" min="4" max="180" value="32" />
+              <input id="markerWidthValue" class="range-value" type="number" min="4" max="180" step="1" value="32" aria-label="Толщина линии числом" />
+            </div>
+          </div>
+          <div class="list-heading">Выделения <span id="markerCount">0</span></div>
           <div class="marker-list" id="markerList"></div>
         </section>
 
@@ -96,7 +103,6 @@
     </div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <div class="custom-tooltip" id="customTooltip" role="tooltip" aria-hidden="true"></div>
-    <div class="credits-popover" id="creditsPopover" role="status" aria-live="polite" aria-hidden="true">Юрий Орлов и Филипп Сапегин, специально для Shkulev Media</div>
     <script type="module" src="/src/app.js"></script>
   </body>
 </html>

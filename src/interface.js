@@ -9,10 +9,7 @@ export function syncRange(range, number, value) {
 
 export function bindInterface() {
   const tooltip = document.getElementById('customTooltip');
-  const credits = document.getElementById('creditsPopover');
-  const creditsButton = document.getElementById('creditsButton');
   let tooltipTarget = null;
-  let creditsTimeout;
 
   function hideTooltip() {
     if (tooltipTarget) {
@@ -30,10 +27,12 @@ export function bindInterface() {
     hideTooltip();
     tooltipTarget = target;
     tooltip.textContent = target.dataset.tooltip;
+    const isCredits = target.id === 'creditsButton';
+    tooltip.classList.toggle('credits-tooltip', isCredits);
     const bounds = target.getBoundingClientRect();
     const size = tooltip.getBoundingClientRect();
     const besideDock = Boolean(target.closest('.tool-dock'));
-    const x = besideDock ? bounds.right + 10 : bounds.left + (bounds.width - size.width) / 2;
+    const x = isCredits ? bounds.left : besideDock ? bounds.right + 10 : bounds.left + (bounds.width - size.width) / 2;
     const y = besideDock ? bounds.top + (bounds.height - size.height) / 2
       : bounds.top >= size.height + 18 ? bounds.top - size.height - 10 : bounds.bottom + 10;
     tooltip.style.left = `${clamp(x, 8, window.innerWidth - size.width - 8)}px`;
@@ -57,28 +56,12 @@ export function bindInterface() {
   document.addEventListener('focusout', (event) => {
     if (tooltipTarget?.contains(event.target)) hideTooltip();
   });
-  document.addEventListener('pointerdown', hideTooltip);
+  document.addEventListener('pointerdown', (event) => {
+    if (!(event.target instanceof Element && event.target.closest('#creditsButton'))) hideTooltip();
+  });
   window.addEventListener('scroll', hideTooltip, true);
   window.addEventListener('resize', hideTooltip);
   window.addEventListener('blur', hideTooltip);
   window.addEventListener('keydown', (event) => { if (event.key === 'Escape') hideTooltip(); });
 
-  creditsButton.addEventListener('click', (event) => {
-    hideTooltip();
-    const bounds = creditsButton.getBoundingClientRect();
-    const x = event.detail ? event.clientX : bounds.left + bounds.width / 2;
-    const y = event.detail ? event.clientY : bounds.top;
-    const size = credits.getBoundingClientRect();
-    credits.style.left = `${clamp(x, 8, window.innerWidth - size.width - 8)}px`;
-    credits.style.top = `${clamp(y - size.height - 10, 8, window.innerHeight - size.height - 8)}px`;
-    credits.classList.add('visible');
-    credits.setAttribute('aria-hidden', 'false');
-    creditsButton.setAttribute('aria-expanded', 'true');
-    clearTimeout(creditsTimeout);
-    creditsTimeout = setTimeout(() => {
-      credits.classList.remove('visible');
-      credits.setAttribute('aria-hidden', 'true');
-      creditsButton.setAttribute('aria-expanded', 'false');
-    }, 5000);
-  });
 }

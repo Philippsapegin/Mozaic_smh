@@ -24,15 +24,19 @@ try {
   assert.equal(await page.locator('[data-tool]').count(), 3);
   assert.equal(await page.locator('.topbar,.tool-rail,.bottom-bar').count(), 0);
   assert.equal(await page.locator('[title]').count(), 0, 'Native tooltips remain');
-  const creditsStarted = Date.now();
-  await page.locator('#creditsButton').click();
-  assert.equal(await page.locator('#creditsPopover').getAttribute('aria-hidden'), 'false');
-  assert.equal(await page.locator('#creditsPopover').textContent(), 'Юрий Орлов и Филипп Сапегин, специально для Shkulev Media');
+  let fileChooserCount = 0;
+  page.on('filechooser', () => { fileChooserCount++; });
+  await page.locator('#creditsButton').hover();
+  assert.equal(await page.locator('#creditsButton').evaluate((element) => element.tagName), 'SPAN');
+  assert.equal(await page.locator('#customTooltip').getAttribute('aria-hidden'), 'false');
+  assert.equal(await page.locator('#customTooltip').textContent(), 'Юрий Орлов и Филипп Сапегин, специально для Shkulev Media');
   const questionBounds = await page.locator('#creditsButton').boundingBox();
-  const creditsBounds = await page.locator('#creditsPopover').boundingBox();
-  assert.ok(Math.abs(creditsBounds.x - questionBounds.x) < 30 && questionBounds.y - creditsBounds.y < 70, 'Credits are not beside the clicked question mark');
-  await page.waitForFunction(() => document.getElementById('creditsPopover').getAttribute('aria-hidden') === 'true', null, { timeout: 6500 });
-  assert.ok(Date.now() - creditsStarted >= 4900, 'Credits disappeared before five seconds');
+  const creditsBounds = await page.locator('#customTooltip').boundingBox();
+  assert.ok(Math.abs(creditsBounds.x - questionBounds.x) < 30 && questionBounds.y - creditsBounds.y < 70, 'Credits are not beside the hovered question mark');
+  await page.locator('#creditsButton').click();
+  assert.equal(fileChooserCount, 0, 'Clicking the credits opened the file chooser');
+  assert.equal(await page.locator('#creditsPopover').count(), 0);
+  assert.equal(await page.locator('#customTooltip').getAttribute('aria-hidden'), 'false');
   for (const [tool, name] of [['mosaic', 'Мозаика'], ['marker', 'Маркер'], ['bubble', 'Баббл']]) {
     await page.locator(`[data-tool="${tool}"]`).hover();
     assert.equal(await page.locator('#customTooltip').textContent(), name);
@@ -78,11 +82,11 @@ try {
   const left = box.x + (box.width - 1080 * scale) / 2;
   const top = box.y + (box.height - 720 * scale) / 2 - 14;
   const imagePoint = (x, y) => ({ x: left + x * scale, y: top + y * scale });
-  const drag = async (a, b) => {
+  const drag = async (a, b, button = 'left') => {
     await page.mouse.move(a.x, a.y);
-    await page.mouse.down();
+    await page.mouse.down({ button });
     await page.mouse.move(b.x, b.y, { steps: 8 });
-    await page.mouse.up();
+    await page.mouse.up({ button });
   };
   const downloadedBytes = async () => {
     const event = page.waitForEvent('download');
@@ -94,6 +98,17 @@ try {
     const data = await downloadedBytes();
     return [data.readUInt32BE(16), data.readUInt32BE(20)];
   };
+  const pixelsAt = (bytes, points) => page.evaluate(async ({ url, points }) => {
+    const image = new Image();
+    image.src = url;
+    await image.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = image.width;
+    canvas.height = image.height;
+    const context = canvas.getContext('2d');
+    context.drawImage(image, 0, 0);
+    return points.map(([x, y]) => [...context.getImageData(x, y, 1, 1).data]);
+  }, { url: `data:image/png;base64,${bytes.toString('base64')}`, points });
 
   const beforeMosaic = await downloadedBytes();
   const brushPoint = imagePoint(250, 370);
@@ -116,19 +131,53 @@ try {
   await page.mouse.move(brushPoint.x, brushPoint.y);
   await page.mouse.wheel(0, -100);
   assert.equal(await page.locator('#brushValue').inputValue(), '48');
-  await drag(imagePoint(180, 165), imagePoint(430, 245));
-  await drag(imagePoint(290, 190), imagePoint(580, 265));
-  assert.equal(await page.locator('#markerCount').textContent(), '2');
+  const beforeMarker = await downloadedBytes();
+  const baselinePixels = await pixelsAt(beforeMarker, [[300, 655], [300, 674], [750, 684], [620, 680], [500, 650]]);
+  await drag(imagePoint(180, 655), imagePoint(430, 655));
+  assert.equal(await page.locator('#markerCount').textContent(), '1');
+  assert.equal(await page.locator('#markerList .list-row>span').first().textContent(), 'Линия 1');
+  const thinLine = await downloadedBytes();
+  const thinPixels = await pixelsAt(thinLine, [[300, 655], [300, 674]]);
+  assert.notDeepEqual(thinPixels[0], baselinePixels[0], 'A horizontal line was not painted');
+  assert.deepEqual(thinPixels[1], baselinePixels[1], 'The initial line is too thick');
+  const linePoint = imagePoint(300, 655);
+  await page.mouse.move(linePoint.x, linePoint.y);
+  await page.mouse.wheel(0, -100);
+  await page.mouse.wheel(0, -100);
+  await page.waitForFunction(() => document.getElementById('markerWidthValue').value === '40');
+  const thickLine = await downloadedBytes();
+  assert.notDeepEqual((await pixelsAt(thickLine, [[300, 674]]))[0], baselinePixels[1], 'Wheel did not thicken the hovered line');
+  await page.keyboard.press('Control+z');
+  assert.equal((await downloadedBytes()).equals(thinLine), true, 'Undo did not restore the whole wheel edit');
+  assert.equal(await page.locator('#markerWidthValue').inputValue(), '32');
+  await page.keyboard.press('Control+Shift+z');
+  assert.equal((await downloadedBytes()).equals(thickLine), true, 'Redo did not restore the line thickness');
+  await drag(imagePoint(600, 640), imagePoint(900, 690));
+  const nextLinePixels = await pixelsAt(await downloadedBytes(), [[750, 684], [620, 680]]);
+  assert.notDeepEqual(nextLinePixels[0], baselinePixels[2], 'The next line did not inherit the changed thickness');
+  assert.deepEqual(nextLinePixels[1], baselinePixels[3], 'A diagonal line filled its bounding rectangle');
+  const beforeRectangle = await downloadedBytes();
+  await drag(imagePoint(290, 640), imagePoint(580, 690), 'right');
+  assert.equal(await page.locator('#markerCount').textContent(), '3');
+  assert.equal(await page.locator('#markerList .list-row>span').last().textContent(), 'Прямоугольник 3');
+  const rectanglePixels = await pixelsAt(await downloadedBytes(), [[300, 655], [500, 650]]);
+  assert.deepEqual(rectanglePixels[0], (await pixelsAt(beforeRectangle, [[300, 655]]))[0], 'An intersection doubled the marker color');
+  assert.notDeepEqual(rectanglePixels[1], baselinePixels[4], 'RMB did not paint a rectangle');
   await page.locator('[data-tool="marker"]').focus();
   assert.equal(await russianUndo(), true);
-  assert.equal(await page.locator('#markerCount').textContent(), '1');
-  await page.keyboard.press('Control+Shift+z');
   assert.equal(await page.locator('#markerCount').textContent(), '2');
+  await page.keyboard.press('Control+Shift+z');
+  assert.equal(await page.locator('#markerCount').textContent(), '3');
   const removePoint = imagePoint(700, 450);
   await page.mouse.click(removePoint.x, removePoint.y, { button: 'right' });
-  assert.equal(await page.locator('#markerCount').textContent(), '1');
-  await page.keyboard.press('Control+z');
+  assert.equal(await page.locator('#markerCount').textContent(), '3', 'A right click deleted an existing highlight');
+  await page.locator('#markerList .list-row button').last().click();
   assert.equal(await page.locator('#markerCount').textContent(), '2');
+  await page.keyboard.press('Control+z');
+  assert.equal(await page.locator('#markerCount').textContent(), '3');
+  await page.locator('#markerWidthValue').fill('52');
+  await page.locator('#markerWidthValue').press('Enter');
+  assert.equal(await page.locator('#markerWidthRange').inputValue(), '52');
 
   await page.locator('[data-tool="bubble"]').click();
   const tip = imagePoint(700, 410);
@@ -187,8 +236,10 @@ try {
   await page.screenshot({ path: 'tests/bubble-hover.png', fullPage: true });
 
   assert.deepEqual(await downloadedSize(), [1080, 720]);
+  const beforeRotationPixels = await pixelsAt(await downloadedBytes(), [[300, 655], [750, 684], [620, 680]]);
   await page.locator('#rotateRightButton').click();
   assert.deepEqual(await downloadedSize(), [720, 1080]);
+  assert.deepEqual(await pixelsAt(await downloadedBytes(), [[64, 300], [35, 750], [39, 620]]), beforeRotationPixels, 'Rotation changed line positions or pixel thickness');
   await page.keyboard.press('Control+z');
   assert.deepEqual(await downloadedSize(), [1080, 720]);
 
@@ -230,7 +281,7 @@ try {
     });
     await page.waitForFunction(() => document.getElementById('bubbleCount').textContent === '0');
     await page.waitForFunction(() => !document.getElementById('faceStatus').textContent.includes('Ищем'), null, { timeout: 120000 });
-    assert.deepEqual(await page.locator('.range-value').evaluateAll((inputs) => inputs.map((input) => input.value)), ['21', '81', '34'], 'Settings reset on the next image');
+    assert.deepEqual(await page.locator('.range-value').evaluateAll((inputs) => inputs.map((input) => input.value)), ['21', '81', '52', '34'], 'Settings reset on the next image');
     if (name === 'next-document.png') {
       await page.locator('[data-tool="bubble"]').click();
       await page.mouse.click(tip.x, tip.y);
@@ -239,11 +290,23 @@ try {
     }
   }
   await page.keyboard.press('Control+z');
-  assert.deepEqual(await page.locator('.range-value').evaluateAll((inputs) => inputs.map((input) => input.value)), ['21', '81', '34'], 'Undo on a fresh image changed its settings');
+  assert.deepEqual(await page.locator('.range-value').evaluateAll((inputs) => inputs.map((input) => input.value)), ['21', '81', '52', '34'], 'Undo on a fresh image changed its settings');
+  await page.locator('[data-tool="marker"]').click();
+  await page.locator('#fileInput').setInputFiles({
+    name: 'marker-document.png', mimeType: 'image/png', buffer: Buffer.from(dataUrl.split(',')[1], 'base64'),
+  });
+  await page.waitForFunction(() => !document.getElementById('faceStatus').textContent.includes('Ищем'), null, { timeout: 120000 });
+  assert.equal(await page.locator('[data-tool="marker"]').getAttribute('aria-pressed'), 'true', 'Loading an image changed the selected tool');
+  assert.equal(await page.locator('#markerWidthValue').inputValue(), '52');
+  await drag(imagePoint(180, 655), imagePoint(430, 655));
+  assert.notDeepEqual((await pixelsAt(await downloadedBytes(), [[300, 679]]))[0], baselinePixels[0], 'The new image did not inherit the marker thickness');
+  await page.keyboard.press('Control+z');
+  assert.equal(await page.locator('#markerCount').textContent(), '0');
+  assert.equal(await page.locator('#markerWidthValue').inputValue(), '52');
 
   assert.deepEqual(errors, []);
   await page.screenshot({ path: 'tests/editor-smoke.png', fullPage: true });
-  process.stdout.write('Smoke test passed: credits timer, instant/fading tooltips, numeric controls, settings across three images, offline faces, undo, bubble ink alignment, rotation, crop, PNG export.\n');
+  process.stdout.write('Smoke test passed: hover credits, instant/fading tooltips, straight marker lines, wheel thickness and inheritance, RMB rectangles, union mask, numeric controls, settings across three images, offline faces, undo, bubble ink alignment, rotation, crop, PNG export.\n');
 } finally {
   await browser.close();
   await server.close();

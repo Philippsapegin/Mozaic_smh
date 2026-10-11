@@ -16,6 +16,7 @@ const bubbleList = $('bubbleList');
 const bubbleText = $('bubbleText');
 const grainRange = $('grainRange');
 const brushRange = $('brushRange');
+const markerWidthRange = $('markerWidthRange');
 const fontRange = $('fontRange');
 
 let sourceBitmap = null;
@@ -34,6 +35,8 @@ let draftMarker = null;
 let hover = null;
 let textEditSession = false;
 let rangeEditSession = null;
+let markerWheelSession = null;
+let markerWheelTimeout = null;
 let renderScheduled = false;
 let toastTimeout = null;
 
@@ -53,6 +56,7 @@ function freshState() {
     rotation: 0,
     grain: 32,
     brushSize: 44,
+    markerWidth: 32,
     fontSize: 26,
     cropEnabled: false,
     cropEditing: false,
@@ -90,6 +94,7 @@ function snapshot() {
 }
 
 function remember() {
+  finishMarkerWheelEdit();
   if (!baseCanvas) return;
   undoStack.push(snapshot());
   if (undoStack.length > 80) undoStack.shift();
@@ -98,6 +103,7 @@ function remember() {
 }
 
 function restore(next) {
+  finishMarkerWheelEdit();
   const rotationChanged = state.rotation !== next.rotation;
   state = next;
   rangeEditSession = null;
@@ -174,7 +180,7 @@ async function loadFile(file) {
     if (sourceBitmap) sourceBitmap.close();
     sourceBitmap = bitmap;
     sourceName = file.name.replace(/\.[^.]+$/, '') || 'изображение';
-    const settings = { grain: state.grain, brushSize: state.brushSize, fontSize: Number(fontRange.value) };
+    const settings = { tool: state.tool, grain: state.grain, brushSize: state.brushSize, markerWidth: state.markerWidth, fontSize: Number(fontRange.value) };
     state = { ...freshState(), ...settings };
     undoStack = [];
     redoStack = [];
@@ -182,6 +188,7 @@ async function loadFile(file) {
     draftMarker = null;
     pointerAction = null;
     rangeEditSession = null;
+    finishMarkerWheelEdit();
     textEditSession = false;
     rebuildBase();
     const { w, h } = size();
@@ -191,6 +198,7 @@ async function loadFile(file) {
     $('faceStatus').textContent = 'Ищем лица на изображении…';
     fileInput.value = '';
     fitView();
+    updateToolUI();
     updatePanels();
     updateControls();
     requestRender();
@@ -244,6 +252,7 @@ function inDocument(point) {
 }
 
 function setTool(tool) {
+  finishMarkerWheelEdit();
   state.tool = tool;
   state.cropEditing = false;
   updateToolUI();
@@ -265,7 +274,7 @@ function updateToolUI() {
     : state.tool === 'mosaic'
       ? 'ЛКМ — мозаика · ПКМ — стереть · Колесо — размер кисти'
       : state.tool === 'marker'
-        ? 'ЛКМ — прямоугольник · ПКМ — удалить последний'
+        ? 'ЛКМ — линия · ПКМ — прямоугольник · Колесо над линией — толщина'
         : 'Клик — новый баббл · перетаскивайте тело и кончик отдельно';
 }
 
@@ -435,6 +444,7 @@ function makeFaceThumb(box) {
 function updatePanels() {
   syncRange(grainRange, $('grainValue'), state.grain);
   syncRange(brushRange, $('brushValue'), state.brushSize);
+  syncRange(markerWidthRange, $('markerWidthValue'), state.markerWidth);
   $('faceCount').textContent = state.faces.length;
   $('markerCount').textContent = state.markers.length;
   $('bubbleCount').textContent = state.bubbles.length;
@@ -497,7 +507,7 @@ function updatePanels() {
       const row = document.createElement('div');
       row.className = 'list-row';
       const name = document.createElement('span');
-      name.textContent = `Выделение ${index + 1}`;
+      name.textContent = `${marker.type === 'line' ? 'Линия' : 'Прямоугольник'} ${index + 1}`;
       const remove = document.createElement('button');
       remove.type = 'button';
       remove.textContent = '×';
@@ -641,9 +651,58 @@ function ensureMarkerMask() {
   cache.markerMask = reuseCanvas(cache.markerMask, w, h);
   const markerCtx = cache.markerMask.getContext('2d');
   markerCtx.fillStyle = '#ff4400';
-  for (const marker of state.markers) markerCtx.fillRect(marker.x, marker.y, marker.w, marker.h);
-  if (draftMarker) markerCtx.fillRect(draftMarker.x, draftMarker.y, draftMarker.w, draftMarker.h);
+  // One filled path forms a union, including antialiased edges at intersections.
+  markerCtx.beginPath();
+  for (const marker of [...state.markers, ...(draftMarker ? [draftMarker] : [])]) {
+    if (marker.type !== 'line') {
+      markerCtx.rect(marker.x, marker.y, marker.w, marker.h);
+      continue;
+    }
+    const dx = marker.b.x - marker.a.x;
+    const dy = marker.b.y - marker.a.y;
+    const length = Math.hypot(dx, dy);
+    if (!length) continue;
+    const nx = -dy / length * marker.width / 2;
+    const ny = dx / length * marker.width / 2;
+    markerCtx.moveTo(marker.a.x - nx, marker.a.y - ny);
+    markerCtx.lineTo(marker.b.x - nx, marker.b.y - ny);
+    markerCtx.lineTo(marker.b.x + nx, marker.b.y + ny);
+    markerCtx.lineTo(marker.a.x + nx, marker.a.y + ny);
+    markerCtx.closePath();
+  }
+  markerCtx.fill();
   cache.markerDirty = false;
+}
+
+function markerLineAt(point) {
+  for (let i = state.markers.length - 1; i >= 0; i--) {
+    const marker = state.markers[i];
+    if (marker.type !== 'line') continue;
+    const dx = marker.b.x - marker.a.x;
+    const dy = marker.b.y - marker.a.y;
+    const lengthSquared = dx * dx + dy * dy;
+    if (!lengthSquared) continue;
+    const t = ((point.x - marker.a.x) * dx + (point.y - marker.a.y) * dy) / lengthSquared;
+    if (t < 0 || t > 1) continue;
+    const distance = Math.hypot(point.x - marker.a.x - t * dx, point.y - marker.a.y - t * dy);
+    if (distance <= marker.width / 2) return marker;
+  }
+  return null;
+}
+
+function finishMarkerWheelEdit() {
+  clearTimeout(markerWheelTimeout);
+  markerWheelSession = null;
+}
+
+function startMarker(point, rectangle) {
+  const start = clampDoc(point);
+  pointerAction = { type: 'marker', start, rectangle };
+  draftMarker = rectangle
+    ? { type: 'rect', ...start, w: 0, h: 0 }
+    : { type: 'line', a: start, b: start, width: imageUnit(state.markerWidth, size().w) };
+  cache.markerDirty = true;
+  requestRender();
 }
 
 function bubbleMetrics(context, bubble, placeholder = true) {
@@ -919,6 +978,7 @@ function startPointer(event) {
   if (!baseCanvas) return;
   if (![0, 1, 2].includes(event.button)) return;
   event.preventDefault();
+  finishMarkerWheelEdit();
   const screen = stagePoint(event);
   const doc = screenToDoc(screen);
   hover = screen;
@@ -927,13 +987,7 @@ function startPointer(event) {
   if (event.button === 2) {
     if (state.cropEditing) return;
     if (state.tool === 'marker') {
-      if (state.markers.length) {
-        remember();
-        state.markers.pop();
-        cache.markerDirty = true;
-        updatePanels();
-        requestRender();
-      }
+      if (inDocument(doc)) startMarker(doc, true);
       return;
     }
     if (state.tool !== 'mosaic' || !inDocument(doc)) return;
@@ -962,10 +1016,7 @@ function startPointer(event) {
     cache.mosaicDirty = true;
     requestRender();
   } else if (state.tool === 'marker') {
-    pointerAction = { type: 'marker', start: clampDoc(doc) };
-    draftMarker = { ...clampDoc(doc), w: 0, h: 0 };
-    cache.markerDirty = true;
-    requestRender();
+    startMarker(doc, false);
   } else if (state.tool === 'bubble') {
     const hit = bubbleAt(screen);
     if (hit) {
@@ -996,7 +1047,8 @@ function movePointer(event) {
         cache.mosaicDirty = true;
       }
     } else if (pointerAction.type === 'marker') {
-      draftMarker = normalizeRect(pointerAction.start, doc);
+      if (pointerAction.rectangle) draftMarker = { type: 'rect', ...normalizeRect(pointerAction.start, doc) };
+      else draftMarker.b = doc;
       cache.markerDirty = true;
     } else if (pointerAction.type === 'crop') {
       const { w, h } = size();
@@ -1039,7 +1091,10 @@ function movePointer(event) {
 function finishPointer(event) {
   if (!pointerAction) return;
   if (pointerAction.type === 'marker') {
-    if (draftMarker && draftMarker.w >= 2 && draftMarker.h >= 2) {
+    const valid = draftMarker && (draftMarker.type === 'line'
+      ? Math.hypot(draftMarker.b.x - draftMarker.a.x, draftMarker.b.y - draftMarker.a.y) >= 2
+      : draftMarker.w >= 2 && draftMarker.h >= 2);
+    if (event.type !== 'pointercancel' && valid) {
       remember();
       state.markers.push({ id: nextId++, ...draftMarker });
     }
@@ -1069,7 +1124,9 @@ function rotateDocument(clockwise) {
     box: rotateRect(face.box, oldWidth, oldHeight, clockwise),
     contour: face.contour?.map((point) => rotatePoint(point, oldWidth, oldHeight, clockwise)) ?? null,
   }));
-  state.markers = state.markers.map((marker) => ({ ...marker, ...rotateRect(marker, oldWidth, oldHeight, clockwise) }));
+  state.markers = state.markers.map((marker) => marker.type === 'line'
+    ? { ...marker, a: rotatePoint(marker.a, oldWidth, oldHeight, clockwise), b: rotatePoint(marker.b, oldWidth, oldHeight, clockwise) }
+    : { ...marker, ...rotateRect(marker, oldWidth, oldHeight, clockwise) });
   state.strokes = state.strokes.map((stroke) => ({
     ...stroke,
     size: stroke.size * oldHeight / oldWidth,
@@ -1176,7 +1233,7 @@ function bindEvents() {
   $('uploadButton').addEventListener('click', openImage);
   $('emptyUploadButton').addEventListener('click', openImage);
   stage.addEventListener('click', (event) => {
-    if (!baseCanvas && !event.target.closest('button')) openImage();
+    if (!baseCanvas && !event.target.closest('button, #creditsButton')) openImage();
   });
   fileInput.addEventListener('change', () => loadFile(fileInput.files?.[0]));
   if (desktop) {
@@ -1255,6 +1312,9 @@ function bindEvents() {
   bindRange(brushRange, $('brushValue'), (value) => {
     state.brushSize = value;
   });
+  bindRange(markerWidthRange, $('markerWidthValue'), (value) => {
+    state.markerWidth = value;
+  });
   bindRange(fontRange, $('fontValue'), (value) => {
     const selected = state.bubbles.find((bubble) => bubble.id === state.selectedBubbleId);
     state.fontSize = value;
@@ -1290,10 +1350,30 @@ function bindEvents() {
   });
   canvas.addEventListener('wheel', (event) => {
     event.preventDefault();
-    if (!baseCanvas || state.tool !== 'mosaic' || state.cropEditing) return;
+    if (!baseCanvas || state.cropEditing || pointerAction || !event.deltaY) return;
     const ticks = Math.max(1, Math.round(Math.abs(event.deltaY) / 100));
-    state.brushSize = clamp(state.brushSize + (event.deltaY < 0 ? 1 : -1) * ticks * 4, 8, 180);
-    syncRange(brushRange, $('brushValue'), state.brushSize);
+    const delta = (event.deltaY < 0 ? 1 : -1) * ticks * 4;
+    if (state.tool === 'mosaic') {
+      state.brushSize = clamp(state.brushSize + delta, 8, 180);
+      syncRange(brushRange, $('brushValue'), state.brushSize);
+    } else if (state.tool === 'marker') {
+      const marker = markerLineAt(screenToDoc(stagePoint(event)));
+      if (!marker) return;
+      const unit = imageUnit(1, size().w);
+      const width = clamp(Math.round(marker.width / unit) + delta, Number(markerWidthRange.min), Number(markerWidthRange.max));
+      if (width * unit === marker.width) return;
+      if (markerWheelSession !== marker.id) {
+        remember();
+        rangeEditSession = null;
+        markerWheelSession = marker.id;
+      }
+      clearTimeout(markerWheelTimeout);
+      markerWheelTimeout = setTimeout(finishMarkerWheelEdit, 300);
+      marker.width = width * unit;
+      state.markerWidth = width;
+      syncRange(markerWidthRange, $('markerWidthValue'), width);
+      cache.markerDirty = true;
+    } else return;
     requestRender();
   }, { passive: false });
 

@@ -1,6 +1,6 @@
 [package]
 name = "mozaic"
-version = "1.0.1"
+version = "1.0.2"
 description = "Offline image editor for journalists"
 edition = "2021"
 

@@ -89,12 +89,12 @@ input[type=range]:focus-visible::-moz-range-thumb{background:#ffab89}
 
 .toast{position:fixed;bottom:82px;left:50%;transform:translate(-50%,10px);z-index:20;padding:9px 13px;border:0;border-radius:8px;background:#2a302e;color:#f1f4ef;box-shadow:0 10px 30px #0007;font-size:11px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s}
 .toast.visible{opacity:1;transform:translate(-50%,0)}
-.credits-button{position:absolute;left:20px;bottom:30px;z-index:5;display:grid;place-items:center;width:24px;height:24px;padding:0;border:0;border-radius:50%;background:#292e2eef;color:#a7b0ab;font-size:13px;font-weight:650;line-height:1}
+.credits-button{position:absolute;left:20px;bottom:30px;z-index:5;display:grid;place-items:center;width:24px;height:24px;padding:0;border:0;border-radius:50%;background:#292e2eef;color:#a7b0ab;font-size:13px;font-weight:650;line-height:1;cursor:help}
 .credits-button:hover{background:#3a4240;color:#eef1ed}
-.custom-tooltip,.credits-popover{position:fixed;z-index:30;max-width:calc(100vw - 16px);padding:8px 11px;border:0;border-radius:8px;background:#303735;color:#eef1ed;box-shadow:0 6px 22px #0006;font-size:11px;line-height:1.45;opacity:0;pointer-events:none;transform:translateY(4px);transition:opacity .18s ease-out,transform .18s ease-out}
+.custom-tooltip{position:fixed;z-index:30;max-width:calc(100vw - 16px);padding:8px 11px;border:0;border-radius:8px;background:#303735;color:#eef1ed;box-shadow:0 6px 22px #0006;font-size:11px;line-height:1.45;opacity:0;pointer-events:none;transform:translateY(4px);transition:opacity .18s ease-out,transform .18s ease-out}
 .custom-tooltip{max-width:min(260px,calc(100vw - 16px));width:max-content}
-.credits-popover{max-width:min(430px,calc(100vw - 16px));width:max-content;z-index:25}
-.custom-tooltip.visible,.credits-popover.visible{opacity:1;transform:translateY(0)}
+.custom-tooltip.credits-tooltip{max-width:min(430px,calc(100vw - 16px))}
+.custom-tooltip.visible{opacity:1;transform:translateY(0)}
 .custom-tooltip.visible{transition-duration:0s}
 @media(max-width:780px){.inspector{width:230px}.inspector-panel{padding:19px 14px}.tool-dock{left:9px}.tool-button{width:42px;height:42px}.stage-hint{display:none}}
 @media(max-width:560px){.inspector{width:190px}.bottom-console{left:calc(50% + 18px);gap:1px;padding:3px}.console-button{width:30px}.save-button{padding:0 8px;font-size:10px}.empty-state{width:min(90%,290px);padding:26px 12px}.empty-state h1{font-size:17px}.tool-dock{top:16px;transform:none}}

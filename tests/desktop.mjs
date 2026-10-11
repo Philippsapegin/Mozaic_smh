@@ -53,6 +53,9 @@ try {
   await page.waitForFunction(() => document.getElementById('editorCanvas').width > 300);
   assert.equal(await page.evaluate(() => Boolean(window.__TAURI_INTERNALS__)), true);
   assert.equal(await page.evaluate(() => Boolean(window.isTauri)), true);
+  await page.locator('#creditsButton').hover();
+  assert.equal(await page.locator('#customTooltip').textContent(), 'Юрий Орлов и Филипп Сапегин, специально для Shkulev Media');
+  assert.equal(await page.locator('#creditsButton').evaluate((element) => element.tagName), 'SPAN');
   const selectDialog = (title, path) => exec('powershell.exe', [
     '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', resolve('tests/native-dialog.ps1'),
     '-WindowTitle', title, '-AppProcessId', String(child.pid), ...(path ? ['-FilePath', path] : ['-ConfirmOnly']),
@@ -69,6 +72,37 @@ try {
   assert.equal(await page.locator('.face-row input').isChecked(), false);
   await page.keyboard.press('Control+z');
   assert.equal(await page.locator('.face-row input').isChecked(), true, 'Desktop Ctrl+Z did not restore the mask');
+  await page.locator('[data-tool="marker"]').click();
+  const box = await page.locator('#stage').boundingBox();
+  const scale = Math.min((box.width - 64) / 820, (box.height - 116) / 1024);
+  const imagePoint = (x, y) => ({
+    x: box.x + (box.width - 820 * scale) / 2 + x * scale,
+    y: box.y + (box.height - 1024 * scale) / 2 - 14 + y * scale,
+  });
+  const drag = async (a, b, button = 'left') => {
+    await page.mouse.move(a.x, a.y);
+    await page.mouse.down({ button });
+    await page.mouse.move(b.x, b.y, { steps: 8 });
+    await page.mouse.up({ button });
+  };
+  await drag(imagePoint(120, 875), imagePoint(540, 875));
+  assert.equal(await page.locator('#markerCount').textContent(), '1');
+  const linePoint = imagePoint(330, 875);
+  await page.mouse.move(linePoint.x, linePoint.y);
+  await page.mouse.wheel(0, -100);
+  await page.waitForFunction(() => document.getElementById('markerWidthValue').value === '36');
+  await page.keyboard.press('Control+z');
+  assert.equal(await page.locator('#markerWidthValue').inputValue(), '32');
+  await page.keyboard.press('Control+Shift+z');
+  assert.equal(await page.locator('#markerWidthValue').inputValue(), '36');
+  await drag(imagePoint(120, 945), imagePoint(540, 945));
+  await drag(imagePoint(180, 860), imagePoint(360, 900), 'right');
+  assert.equal(await page.locator('#markerCount').textContent(), '3');
+  await page.keyboard.press('Control+z');
+  assert.equal(await page.locator('#markerCount').textContent(), '2');
+  await page.keyboard.press('Control+Shift+z');
+  assert.equal(await page.locator('#markerCount').textContent(), '3');
+  await page.locator('[data-tool="mosaic"]').click();
   await page.locator('.face-row').evaluate((row) => row.click());
   await page.screenshot({ path: 'tests/desktop-preview.png' });
   const outputPath = join(work, 'Мозаика проверка-mozaic.png');
@@ -79,7 +113,7 @@ try {
   assert.deepEqual([output.readUInt32BE(16), output.readUInt32BE(20)], [820, 1024]);
   assert.deepEqual(external, []);
   assert.deepEqual(errors, []);
-  process.stdout.write(`Desktop test passed: embedded assets, offline face detection, native Open/Save, Unicode path, PNG export. ${outputPath}\n`);
+  process.stdout.write(`Desktop test passed: hover credits, marker lines, wheel thickness, RMB rectangles, undo/redo, embedded assets, offline face detection, native Open/Save, Unicode path, PNG export. ${outputPath}\n`);
 } finally {
   if (browser) {
     const page = browser.contexts()[0]?.pages()[0];
