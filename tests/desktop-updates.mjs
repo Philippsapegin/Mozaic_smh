@@ -27,9 +27,11 @@ try {
   }
   assert.ok(browser, 'Could not connect to the packaged updater');
   const page = browser.contexts()[0].pages()[0];
-  await page.waitForFunction(() => document.getElementById('editorCanvas').width > 300);
+  await page.waitForFunction(() => document.getElementById('editorCanvas')?.width > 300);
   const update = await page.evaluate(() => window.__TAURI_INTERNALS__.invoke('plugin:updater|check', { timeout: 20000 }));
   if (previousExecutable) {
+    const currentVersion = await page.evaluate(() => window.__TAURI_INTERNALS__.invoke('plugin:app|version'));
+    process.stdout.write(`Updater inspection: running ${currentVersion}, available ${update?.version ?? 'none'}.\n`);
     assert.equal(update?.version, version, 'The previous version did not discover the published update');
     await page.locator('#updateNotice').waitFor({ state: 'visible' });
     assert.equal(await page.locator('#updateTitle').textContent(), `Мозаика ${version} доступна`);
