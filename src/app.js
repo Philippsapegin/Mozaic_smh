@@ -5,6 +5,7 @@ import { detectFacesOffline } from './offline-faces.js';
 import { bindNativeDrops, chooseImage, desktop, saveImage } from './platform.js';
 import { bindInterface, syncRange } from './interface.js';
 import { bindUpdates } from './updates.js';
+import { averageBlocks } from './mosaic.js';
 
 const $ = (id) => document.getElementById(id);
 const stage = $('stage');
@@ -19,6 +20,13 @@ const grainRange = $('grainRange');
 const brushRange = $('brushRange');
 const markerWidthRange = $('markerWidthRange');
 const fontRange = $('fontRange');
+// Load both alphabets and weights before the first bubble can be measured or
+// drawn. A font loaded on the first Bold click otherwise leaves canvas using
+// fallback metrics until the next redraw.
+const bubbleFontsReady = Promise.all([
+  document.fonts.load('400 26px "Roboto Condensed"', 'Баббл Ёё № ABC'),
+  document.fonts.load('700 26px "Roboto Condensed"', 'Баббл Ёё № ABC'),
+]);
 
 let sourceBitmap = null;
 let sourceName = '';
@@ -173,6 +181,7 @@ async function loadFile(file) {
   }
   const token = ++detectionToken;
   try {
+    await bubbleFontsReady;
     const bitmap = await createImageBitmap(file);
     if (token !== detectionToken) {
       bitmap.close();
@@ -181,7 +190,7 @@ async function loadFile(file) {
     if (sourceBitmap) sourceBitmap.close();
     sourceBitmap = bitmap;
     sourceName = file.name.replace(/\.[^.]+$/, '') || 'изображение';
-    const settings = { tool: state.tool, grain: state.grain, brushSize: state.brushSize, markerWidth: state.markerWidth, fontSize: Number(fontRange.value) };
+    const settings = { tool: state.tool, grain: state.grain, brushSize: state.brushSize, markerWidth: state.markerWidth, fontSize: state.fontSize };
     state = { ...freshState(), ...settings };
     undoStack = [];
     redoStack = [];
@@ -561,7 +570,7 @@ function updatePanels() {
   const selected = state.bubbles.find((bubble) => bubble.id === state.selectedBubbleId);
   bubbleText.disabled = !selected;
   bubbleText.value = selected?.text ?? '';
-  syncRange(fontRange, $('fontValue'), selected?.fontSize ?? state.fontSize);
+  syncRange(fontRange, $('fontValue'), state.fontSize);
   $('boldButton').disabled = !selected;
   $('boldButton').classList.toggle('active', Boolean(selected?.bold));
   $('boldButton').setAttribute('aria-pressed', String(Boolean(selected?.bold)));
@@ -612,12 +621,13 @@ function ensurePixelated() {
   if (!cache.pixelDirty && cache.pixelated) return;
   const { w, h } = size();
   const cell = Math.max(2, Math.round(imageUnit(state.grain, w)));
-  const small = makeCanvas(Math.ceil(w / cell), Math.ceil(h / cell));
-  small.getContext('2d').drawImage(baseCanvas, 0, 0, small.width, small.height);
+  const blocks = averageBlocks(baseCanvas.getContext('2d').getImageData(0, 0, w, h), cell);
+  const small = makeCanvas(blocks.width, blocks.height);
+  small.getContext('2d').putImageData(new ImageData(blocks.data, blocks.width, blocks.height), 0, 0);
   cache.pixelated = makeCanvas(w, h);
   const pixelCtx = cache.pixelated.getContext('2d');
   pixelCtx.imageSmoothingEnabled = false;
-  pixelCtx.drawImage(small, 0, 0, w, h);
+  pixelCtx.drawImage(small, 0, 0, blocks.width * cell, blocks.height * cell);
   cache.pixelDirty = false;
   cache.mosaicDirty = true;
 }
@@ -708,7 +718,7 @@ function startMarker(point, rectangle) {
 
 function bubbleMetrics(context, bubble, placeholder = true) {
   const { w } = size();
-  const font = imageUnit(bubble.fontSize, w);
+  const font = imageUnit(state.fontSize, w);
   const lineHeight = font * 1.18;
   const padX = imageUnit(16, w);
   const padY = imageUnit(12, w);
@@ -966,7 +976,7 @@ function createBubble(tip) {
   remember();
   const { w, h } = size();
   const bubble = {
-    id: nextId++, text: '', fontSize: state.fontSize, bold: false,
+    id: nextId++, text: '', bold: false,
     x: tip.x + imageUnit(30, w),
     y: tip.y - imageUnit(100, w),
     tip: { ...tip },
@@ -1158,10 +1168,7 @@ function rotateDocument(clockwise) {
 
 async function savePng() {
   if (!baseCanvas) return;
-  await Promise.all([
-    document.fonts.load('400 26px "Roboto Condensed"'),
-    document.fonts.load('700 26px "Roboto Condensed"'),
-  ]);
+  await bubbleFontsReady;
   const { w, h } = size();
   const crop = state.cropEnabled && state.crop ? state.crop : { x: 0, y: 0, w, h };
   const left = clamp(Math.round(crop.x), 0, w - 1);
@@ -1323,12 +1330,8 @@ function bindEvents() {
     state.markerWidth = value;
   });
   bindRange(fontRange, $('fontValue'), (value) => {
-    const selected = state.bubbles.find((bubble) => bubble.id === state.selectedBubbleId);
     state.fontSize = value;
-    if (selected) {
-      selected.fontSize = value;
-      keepBubbleInFrame(selected);
-    }
+    state.bubbles.forEach(keepBubbleInFrame);
   });
   bubbleText.addEventListener('focus', () => { textEditSession = false; });
   bubbleText.addEventListener('blur', () => { textEditSession = false; updatePanels(); });
@@ -1409,7 +1412,7 @@ function bindEvents() {
     if (event.key === '3') setTool('bubble');
   });
   new ResizeObserver(resizeCanvas).observe(stage);
-  document.fonts.ready.then(requestRender);
+  document.fonts.addEventListener('loadingdone', requestRender);
 }
 
 stage.classList.add('no-image');

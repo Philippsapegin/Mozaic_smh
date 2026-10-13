@@ -40,7 +40,7 @@ try {
   page.on('pageerror', (error) => { errors.push(error.message); process.stderr.write(`${error.message}\n`); });
   page.on('console', (message) => {
     if ((message.type() === 'error' && !message.text().startsWith('INFO:')) || message.text().startsWith('Offline face check')) {
-      process.stderr.write(`Desktop console: ${message.text()}\n`);
+      process.stderr.write(`Desktop console: ${message.text().replace(/data:[^'"\s]+/g, '[embedded asset]')}\n`);
     }
   });
   page.context().on('request', (request) => {
@@ -61,6 +61,15 @@ try {
     '-WindowTitle', title, '-AppProcessId', String(child.pid), ...(path ? ['-FilePath', path] : ['-ConfirmOnly']),
   ], { windowsHide: true });
 
+  await page.waitForFunction(() => ['400', '700'].every((weight) => [...document.fonts]
+    .some((face) => face.weight === weight && face.status === 'loaded' && face.unicodeRange.includes('400-45F'))));
+  const cyrillicFonts = await page.evaluate(() => [...document.fonts]
+    .filter((face) => face.family.replace(/["']/g, '') === 'Roboto Condensed' && face.unicodeRange.includes('400-45F'))
+    .map((face) => ({ weight: face.weight, status: face.status })));
+  for (const weight of ['400', '700']) {
+    assert.ok(cyrillicFonts.some((face) => face.weight === weight && face.status === 'loaded'),
+      `Packaged Cyrillic ${weight} was not loaded before editing`);
+  }
   await page.locator('#emptyUploadButton').evaluate((button) => button.click());
   await selectDialog('Открыть изображение', inputPath);
   await page.locator('#emptyState').waitFor({ state: 'hidden' });

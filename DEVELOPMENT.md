@@ -18,14 +18,19 @@ npm run desktop:build
 
 ```powershell
 npm test
+npm run test:regressions
+node tests/bundle-fonts.mjs
 npm run test:updates
 node tests/shortcut.mjs
 node tests/face-contour.mjs "C:\path\to\portrait.jpg"
 node tests/desktop.mjs "C:\path\to\portrait.jpg"
 node tests/release-signature.mjs
+node tests/desktop-updates.mjs
 ```
 
 Проверки интерфейса используют установленный Edge. Для контуров и EXE нужен контрольный портрет MediaPipe 820 × 1024. Проверка подписи требует собранный установщик; она также проверяет отклонение изменённого файла.
+
+После публикации можно проверить уведомление в предыдущей версии: `node tests/desktop-updates.mjs release/Mozaic-1.0.3.exe`. Проверка открывает отдельную копию с временным профилем и не устанавливает обновление.
 
 ## Подписанные обновления и публикация
 

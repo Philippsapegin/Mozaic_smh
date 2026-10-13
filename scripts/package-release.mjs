@@ -31,7 +31,7 @@ const setup = `release/Mozaic-${version}-setup.exe`;
 const signature = (await readFile(`src-tauri/target/release/bundle/nsis/${installer}.sig`, 'utf8')).trim();
 await writeFile('release/Mozaic-setup.exe.sig', `${signature}\n`);
 await writeFile('release/latest.json', `${JSON.stringify({
-  version, notes: 'Новая версия Мозаики.', pub_date: new Date().toISOString(),
+  version, notes: 'Исправлены жирный шрифт и цвет мозаики. Размер текста общий для всех бабблов; зерно мозаики от 2 до 32.', pub_date: new Date().toISOString(),
   platforms: {
     'windows-x86_64': { signature, url: `https://github.com/Philippsapegin/Mozaic_smh/releases/download/v${version}/Mozaic-setup.exe` },
   },

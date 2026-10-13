@@ -273,7 +273,7 @@ try {
   assert.equal(await page.locator('#grainValue').inputValue(), '32', 'A fresh numeric edit was lost after undo');
   await page.locator('#grainValue').fill('999');
   await page.locator('#grainValue').press('Enter');
-  assert.equal(await page.locator('#grainValue').inputValue(), '80', 'Numeric input is outside slider bounds');
+  assert.equal(await page.locator('#grainValue').inputValue(), '32', 'Numeric input is outside slider bounds');
   await page.locator('#grainValue').fill('21');
   await page.locator('#grainValue').press('Enter');
   await page.locator('#brushValue').fill('76');

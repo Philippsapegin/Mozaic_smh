@@ -1,7 +1,5 @@
-@import "@fontsource/roboto-condensed/cyrillic-400.css";
-@import "@fontsource/roboto-condensed/latin-400.css";
-@import "@fontsource/roboto-condensed/cyrillic-700.css";
-@import "@fontsource/roboto-condensed/latin-700.css";
+@import "@fontsource/roboto-condensed/400.css";
+@import "@fontsource/roboto-condensed/700.css";
 
 :root{font-family:Inter,"Segoe UI",Arial,sans-serif;color:#e7e9e7;background:#151719;font-synthesis:none}
 *{box-sizing:border-box}
